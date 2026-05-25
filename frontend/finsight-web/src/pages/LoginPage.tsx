@@ -15,7 +15,8 @@ export default function LoginPage() {
     setIsLoading(true)
     try {
       const res = await api.post('/auth/login', { email, password })
-      localStorage.setItem('finsight_token', res.data.token)
+      localStorage.setItem('finsight_token',         res.data.token)
+      localStorage.setItem('finsight_refresh_token', res.data.refreshToken)
       navigate('/')
     } catch {
       setError('Invalid email or password')

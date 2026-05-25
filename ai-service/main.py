@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routes import analyze
+from routes import analyze, chat
 
 
 @asynccontextmanager
@@ -27,6 +27,7 @@ app.add_middleware(
 )
 
 app.include_router(analyze.router, prefix="/analyze", tags=["analyze"])
+app.include_router(chat.router,   prefix="/chat",    tags=["chat"])
 
 
 @app.get("/health")

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AllocationChart from '../components/AllocationChart'
+import ChatPanel from '../components/ChatPanel'
 import ConnectBrokerage from '../components/ConnectBrokerage'
 import InsightsPanel from '../components/InsightsPanel'
 import PerformanceChart from '../components/PerformanceChart'
@@ -112,8 +113,11 @@ export default function DashboardPage() {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
   }, [])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Best-effort server-side revocation (invalidates refresh token in DB)
+    api.post('/auth/logout').catch(() => {/* ignore if token already expired */})
     localStorage.removeItem('finsight_token')
+    localStorage.removeItem('finsight_refresh_token')
     navigate('/login')
   }
 
@@ -323,6 +327,9 @@ export default function DashboardPage() {
           </tbody>
         </table>
       )}
+
+      {/* ── AI Chat Copilot — floating widget ──────────────────────────── */}
+      <ChatPanel hasHoldings={holdings.length > 0} />
     </div>
   )
 }
