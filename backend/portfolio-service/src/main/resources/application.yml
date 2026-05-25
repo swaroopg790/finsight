@@ -1,0 +1,77 @@
+spring:
+  application:
+    name: portfolio-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/finsight
+    username: finsight
+    password: finsight
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Secret is provided via environment variable FINSIGHT_JWT_SECRET
+          # Must be at least 32 characters for HS256
+          issuer-uri: # unused for symmetric key — configured in SecurityConfig
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+finsight:
+  jwt:
+    secret: ${FINSIGHT_JWT_SECRET:change-me-in-production-must-be-32-chars!!}
+    expiry-hours: 24
+  cors:
+    allowed-origins: http://localhost:5173
+  encryption:
+    # AES-256 key — must be changed in production via FINSIGHT_ENCRYPTION_KEY env var
+    key: ${FINSIGHT_ENCRYPTION_KEY:dev-only-encryption-key-change-me!!}
+  plaid:
+    client-id: ${PLAID_CLIENT_ID:}
+    secret: ${PLAID_SECRET:}
+    env: sandbox
+    # Set to 'mock' for local dev without Plaid credentials; 'sandbox' for real Plaid sandbox
+    mode: ${PLAID_MODE:mock}
+  polygon:
+    api-key: ${POLYGON_API_KEY:}
+  ai-service:
+    url: ${AI_SERVICE_URL:http://localhost:8000}
+
+logging:
+  level:
+    com.finsight: INFO
+    org.springframework.security: WARN
+  pattern:
+    console: "%d{HH:mm:ss} %-5level [%thread] %logger{36} - %msg%n"
