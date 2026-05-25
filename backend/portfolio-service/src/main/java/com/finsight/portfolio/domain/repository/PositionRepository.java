@@ -31,4 +31,16 @@ public interface PositionRepository extends JpaRepository<Position, UUID> {
     @Modifying
     @Query("UPDATE Position p SET p.currentPrice = :price, p.currentValue = p.quantity * :price WHERE p.ticker = :ticker")
     int updateCurrentPriceByTicker(@Param("ticker") String ticker, @Param("price") BigDecimal price);
+
+    /**
+     * Returns (userId, totalValue) pairs — sums priced current values per user.
+     * Used by PortfolioSyncScheduler to record daily portfolio snapshots.
+     * Positions with null currentValue contribute 0 so snapshot is always recorded.
+     */
+    @Query("""
+            SELECT p.account.plaidItem.user.id, SUM(COALESCE(p.currentValue, 0))
+            FROM Position p
+            GROUP BY p.account.plaidItem.user.id
+            """)
+    List<Object[]> sumCurrentValueGroupedByUserId();
 }

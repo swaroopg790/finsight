@@ -1,5 +1,6 @@
 package com.finsight.portfolio.domain.service;
 
+import com.finsight.portfolio.api.exception.ResourceNotFoundException;
 import com.finsight.portfolio.domain.model.Account;
 import com.finsight.portfolio.domain.model.PlaidItem;
 import com.finsight.portfolio.domain.model.Position;
@@ -85,6 +86,24 @@ public class PlaidService {
         //    Runs on a background thread — connectBrokerage() returns immediately.
         priceEnrichmentService.enrichAllPricesAsync();
         log.info("Polygon quick price refresh queued for item={}", item.getId());
+    }
+
+    /**
+     * Removes a connected brokerage item for the given user.
+     * DB cascades handle deletion of associated accounts and positions automatically.
+     *
+     * Security: itemId must belong to the requesting userId — throws 404 if not found
+     * or if the item belongs to a different user (prevents IDOR).
+     */
+    @Transactional
+    public void disconnectItem(UUID userId, UUID itemId) {
+        PlaidItem item = plaidItemRepository.findByIdAndUserId(itemId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Brokerage connection not found: " + itemId));
+        log.info("Disconnecting PlaidItem id={} institution={} for user={}",
+                item.getId(), item.getInstitutionName(), userId);
+        plaidItemRepository.delete(item);
+        log.info("PlaidItem id={} deleted — accounts and positions cascade-removed", itemId);
     }
 
     /**

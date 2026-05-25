@@ -1,7 +1,9 @@
 package com.finsight.portfolio.api.controller;
 
 import com.finsight.portfolio.api.dto.response.AccountResponse;
+import com.finsight.portfolio.api.dto.response.AllocationItem;
 import com.finsight.portfolio.api.dto.response.HoldingResponse;
+import com.finsight.portfolio.api.dto.response.SnapshotPoint;
 import com.finsight.portfolio.domain.service.PortfolioService;
 import com.finsight.portfolio.infrastructure.market.PriceEnrichmentService;
 import lombok.RequiredArgsConstructor;
@@ -19,8 +21,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PortfolioController {
 
-    private final PortfolioService       portfolioService;
-    private final PriceEnrichmentService priceEnrichmentService;
+    private final PortfolioService        portfolioService;
+    private final PriceEnrichmentService  priceEnrichmentService;
 
     @GetMapping("/holdings")
     public List<HoldingResponse> getHoldings(@AuthenticationPrincipal Jwt jwt) {
@@ -33,11 +35,29 @@ public class PortfolioController {
     }
 
     /**
+     * Returns daily portfolio value snapshots for the past N days (default 30).
+     * Sparse for new users — scheduler records one point every 4 hours.
+     */
+    @GetMapping("/performance")
+    public List<SnapshotPoint> getPerformance(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(defaultValue = "30") int days) {
+        int clampedDays = Math.max(7, Math.min(365, days));
+        return portfolioService.getPerformance(UUID.fromString(jwt.getSubject()), clampedDays);
+    }
+
+    /**
+     * Returns asset allocation breakdown by ticker, sorted by value descending.
+     * Only priced positions are included.
+     */
+    @GetMapping("/allocation")
+    public List<AllocationItem> getAllocation(@AuthenticationPrincipal Jwt jwt) {
+        return portfolioService.getAllocation(UUID.fromString(jwt.getSubject()));
+    }
+
+    /**
      * Triggers an immediate async Polygon.io price refresh for all positions.
      * Returns 202 Accepted immediately — enrichment runs in the background.
-     *
-     * The frontend can call this after connecting a brokerage and then re-fetch
-     * holdings a few seconds later to show live market prices.
      */
     @PostMapping("/refresh-prices")
     @ResponseStatus(HttpStatus.ACCEPTED)

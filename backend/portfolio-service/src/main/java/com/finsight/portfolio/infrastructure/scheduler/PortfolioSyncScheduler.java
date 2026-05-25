@@ -1,8 +1,12 @@
 package com.finsight.portfolio.infrastructure.scheduler;
 
 import com.finsight.portfolio.domain.model.PlaidItem;
+import com.finsight.portfolio.domain.model.PortfolioSnapshot;
+import com.finsight.portfolio.domain.model.User;
 import com.finsight.portfolio.domain.repository.PlaidItemRepository;
+import com.finsight.portfolio.domain.repository.PortfolioSnapshotRepository;
 import com.finsight.portfolio.domain.repository.PositionRepository;
+import com.finsight.portfolio.domain.repository.UserRepository;
 import com.finsight.portfolio.domain.service.PlaidService;
 import com.finsight.portfolio.infrastructure.ai.AiInsightClient;
 import com.finsight.portfolio.infrastructure.market.PolygonClient;
@@ -13,14 +17,18 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Periodic background job that:
  *   1. Re-syncs all active Plaid items (accounts + holdings)
  *   2. Enriches position prices from Polygon.io (previous-day close)
- *   3. Invalidates the AI insights cache so the next dashboard load gets fresh analysis
+ *   3. Records a daily portfolio value snapshot per user (for the performance chart)
+ *   4. Invalidates the AI insights cache so the next dashboard load gets fresh analysis
  *
  * Runs every 4 hours. Polygon free tier: 5 req/min → 13s sleep between tickers.
  */
@@ -29,13 +37,15 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class PortfolioSyncScheduler {
 
-    private final PlaidItemRepository plaidItemRepository;
-    private final PositionRepository  positionRepository;
-    private final PlaidService        plaidService;
-    private final PolygonClient       polygonClient;
-    private final AiInsightClient     aiInsightClient;
+    private final PlaidItemRepository        plaidItemRepository;
+    private final PositionRepository         positionRepository;
+    private final PortfolioSnapshotRepository snapshotRepository;
+    private final UserRepository             userRepository;
+    private final PlaidService               plaidService;
+    private final PolygonClient              polygonClient;
+    private final AiInsightClient            aiInsightClient;
 
-    /** Plaid sync + price enrichment + AI cache invalidation every 4 hours. */
+    /** Plaid sync + price enrichment + snapshot recording + AI cache invalidation every 4 hours. */
     @Scheduled(fixedRateString = "PT4H")
     public void syncAllPortfolios() {
         List<PlaidItem> activeItems =
@@ -67,8 +77,10 @@ public class PortfolioSyncScheduler {
         // ── Step 2: Polygon price enrichment ────────────────────────────────
         enrichPricesFromPolygon();
 
-        // ── Step 3: Invalidate AI insight caches ────────────────────────────
-        // Each unique user gets fresh insights on their next dashboard load
+        // ── Step 3: Record daily portfolio snapshots ─────────────────────────
+        recordDailySnapshots();
+
+        // ── Step 4: Invalidate AI insight caches ────────────────────────────
         activeItems.stream()
                 .map(item -> item.getUser().getId().toString())
                 .distinct()
@@ -116,5 +128,48 @@ public class PortfolioSyncScheduler {
         }
 
         log.info("Polygon price enrichment complete — {}/{} tickers updated", updated, tickers.size());
+    }
+
+    /**
+     * Records (or updates) one portfolio snapshot per user for today.
+     * Called after price enrichment so values are as fresh as possible.
+     * Uses UPSERT semantics via the unique constraint on (user_id, snapshot_date).
+     */
+    @Transactional
+    public void recordDailySnapshots() {
+        List<Object[]> rows = positionRepository.sumCurrentValueGroupedByUserId();
+        if (rows.isEmpty()) {
+            log.debug("No positions — skipping snapshot recording");
+            return;
+        }
+
+        LocalDate today = LocalDate.now();
+        int recorded = 0;
+
+        for (Object[] row : rows) {
+            UUID      userId     = (UUID) row[0];
+            BigDecimal totalValue = (BigDecimal) row[1];
+            if (totalValue == null) totalValue = BigDecimal.ZERO;
+
+            try {
+                User user = userRepository.getReferenceById(userId);
+                PortfolioSnapshot snapshot = snapshotRepository
+                        .findByUserIdAndSnapshotDate(userId, today)
+                        .orElseGet(() -> PortfolioSnapshot.builder()
+                                .user(user)
+                                .snapshotDate(today)
+                                .createdAt(Instant.now())
+                                .build());
+
+                snapshot.setTotalValue(totalValue);
+                snapshotRepository.save(snapshot);
+                recorded++;
+                log.debug("Snapshot recorded for user={} date={} value={}", userId, today, totalValue);
+            } catch (Exception e) {
+                log.error("Failed to record snapshot for user={}: {}", userId, e.getMessage());
+            }
+        }
+
+        log.info("Daily snapshot recording complete — {}/{} users recorded", recorded, rows.size());
     }
 }

@@ -5,6 +5,7 @@ import java.util.UUID;
 
 public record AccountResponse(
         UUID accountId,
+        UUID plaidItemId,       // institution-level item — used by DELETE /plaid/items/{id}
         String name,
         String type,
         String subtype,

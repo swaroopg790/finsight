@@ -47,4 +47,17 @@ public class PlaidController {
         );
         return Map.of("status", "connected");
     }
+
+    /**
+     * Disconnects a brokerage account.
+     * Deletes the PlaidItem — DB cascades remove all associated accounts and positions.
+     * Returns 404 if the item doesn't exist or belongs to a different user (IDOR-safe).
+     */
+    @DeleteMapping("/items/{itemId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void disconnectItem(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID itemId) {
+        plaidService.disconnectItem(UUID.fromString(jwt.getSubject()), itemId);
+    }
 }

@@ -1,8 +1,10 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import AllocationChart from '../components/AllocationChart'
 import ConnectBrokerage from '../components/ConnectBrokerage'
 import InsightsPanel from '../components/InsightsPanel'
+import PerformanceChart from '../components/PerformanceChart'
 import api from '../lib/api'
 
 interface Holding {
@@ -19,21 +21,25 @@ interface Holding {
 }
 
 interface Account {
-  accountId: string
-  name: string
-  type: string
-  balanceCurrent: number
-  currency: string
+  accountId:       string
+  plaidItemId:     string   // institution-level ID — used for disconnect
+  name:            string
+  type:            string
+  balanceCurrent:  number
+  currency:        string
   institutionName: string
 }
 
 export default function DashboardPage() {
-  const navigate     = useNavigate()
-  const queryClient  = useQueryClient()
+  const navigate    = useNavigate()
+  const queryClient = useQueryClient()
 
   // Track whether we're waiting for a Polygon price refresh after connecting
   const [pricesSyncing, setPricesSyncing] = useState(false)
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Which plaidItemId is being disconnected (shows spinner in that row)
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
 
   const { data: holdings = [], isLoading: holdingsLoading } = useQuery<Holding[]>({
     queryKey: ['holdings'],
@@ -45,9 +51,32 @@ export default function DashboardPage() {
     queryFn:  () => api.get('/portfolio/accounts').then((r) => r.data),
   })
 
+  // Disconnect mutation — DELETE /plaid/items/{itemId}
+  const disconnectMutation = useMutation({
+    mutationFn: (plaidItemId: string) =>
+      api.delete(`/plaid/items/${plaidItemId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['holdings'] })
+      queryClient.invalidateQueries({ queryKey: ['allocation'] })
+      queryClient.invalidateQueries({ queryKey: ['performance'] })
+      queryClient.invalidateQueries({ queryKey: ['insights'] })
+      setDisconnectingId(null)
+    },
+    onError: () => {
+      setDisconnectingId(null)
+      alert('Failed to disconnect brokerage. Please try again.')
+    },
+  })
+
+  const handleDisconnect = useCallback((plaidItemId: string, institutionName: string) => {
+    if (!window.confirm(`Disconnect ${institutionName}? This will remove all associated accounts and holdings.`)) return
+    setDisconnectingId(plaidItemId)
+    disconnectMutation.mutate(plaidItemId)
+  }, [disconnectMutation])
+
   // Called by ConnectBrokerage after a successful exchange
   const handleBrokerageConnected = useCallback(() => {
-    // Immediately refresh accounts + holdings
     queryClient.invalidateQueries({ queryKey: ['accounts'] })
     queryClient.invalidateQueries({ queryKey: ['holdings'] })
 
@@ -59,6 +88,7 @@ export default function DashboardPage() {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
     syncTimerRef.current = setTimeout(() => {
       queryClient.invalidateQueries({ queryKey: ['holdings'] })
+      queryClient.invalidateQueries({ queryKey: ['allocation'] })
       queryClient.invalidateQueries({ queryKey: ['insights'] })
       setPricesSyncing(false)
     }, 12_000)
@@ -71,6 +101,7 @@ export default function DashboardPage() {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
     syncTimerRef.current = setTimeout(() => {
       queryClient.invalidateQueries({ queryKey: ['holdings'] })
+      queryClient.invalidateQueries({ queryKey: ['allocation'] })
       queryClient.invalidateQueries({ queryKey: ['insights'] })
       setPricesSyncing(false)
     }, 12_000)
@@ -87,13 +118,19 @@ export default function DashboardPage() {
   }
 
   // Count how many positions have market prices vs pending
-  const pricedCount   = holdings.filter(h => h.currentValue != null).length
-  const pendingCount  = holdings.filter(h => h.currentValue == null).length
-  const allPriceless  = holdings.length > 0 && pricedCount === 0  // no prices at all yet
+  const pricedCount  = holdings.filter(h => h.currentValue != null).length
+  const pendingCount = holdings.filter(h => h.currentValue == null).length
+  const allPriceless = holdings.length > 0 && pricedCount === 0
 
   // Always sum available values — partial total is better than $0
   const totalValue    = holdings.reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
   const totalGainLoss = holdings.reduce((sum, h) => sum + (h.unrealizedGainLoss ?? 0), 0)
+
+  // Group accounts by institution so we show one Disconnect button per institution
+  const institutionMap = accounts.reduce<Record<string, { plaidItemId: string; name: string }>>((acc, a) => {
+    if (!acc[a.plaidItemId]) acc[a.plaidItemId] = { plaidItemId: a.plaidItemId, name: a.institutionName }
+    return acc
+  }, {})
 
   return (
     <div style={{ maxWidth: 960, margin: '0 auto', padding: '32px 24px' }}>
@@ -139,7 +176,7 @@ export default function DashboardPage() {
       )}
 
       {/* ── Portfolio Summary ──────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 32 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
         <div style={{ background: '#f5f5f5', borderRadius: 12, padding: 24 }}>
           <p style={{ margin: 0, color: '#666', fontSize: 13 }}>Total Portfolio Value</p>
           <p style={{ margin: '8px 0 0', fontSize: 36, fontWeight: 700 }}>
@@ -165,11 +202,17 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── AI Portfolio Insights ─────────────────────────────────────── */}
-      <InsightsPanel hasHoldings={holdings.length > 0} />
+      {/* ── Performance Chart ──────────────────────────────────────────── */}
+      <PerformanceChart hasHoldings={holdings.length > 0} />
+
+      {/* ── Allocation + AI Insights side by side ─────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 8 }}>
+        <AllocationChart hasHoldings={holdings.length > 0} />
+        <InsightsPanel   hasHoldings={holdings.length > 0} />
+      </div>
 
       {/* ── Connected Accounts ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, marginTop: 8 }}>
         <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Connected Accounts</h2>
         <ConnectBrokerage onSuccess={handleBrokerageConnected} />
       </div>
@@ -196,9 +239,30 @@ export default function DashboardPage() {
                   {a.institutionName} · {a.type}
                 </p>
               </div>
-              <p style={{ margin: 0, fontWeight: 600, fontSize: 17 }}>
-                ${(a.balanceCurrent ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <p style={{ margin: 0, fontWeight: 600, fontSize: 17 }}>
+                  ${(a.balanceCurrent ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </p>
+                {/* Show one Disconnect button per institution (same plaidItemId = same brokerage) */}
+                {institutionMap[a.plaidItemId] && (
+                  <button
+                    onClick={() => handleDisconnect(a.plaidItemId, a.institutionName)}
+                    disabled={disconnectingId === a.plaidItemId}
+                    title={`Disconnect ${a.institutionName}`}
+                    style={{
+                      background: 'none',
+                      border:     '1px solid #fca5a5',
+                      borderRadius: 6,
+                      padding:    '3px 10px',
+                      fontSize:   12,
+                      cursor:     disconnectingId === a.plaidItemId ? 'wait' : 'pointer',
+                      color:      disconnectingId === a.plaidItemId ? '#aaa' : '#dc2626',
+                    }}
+                  >
+                    {disconnectingId === a.plaidItemId ? 'Removing…' : 'Disconnect'}
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
