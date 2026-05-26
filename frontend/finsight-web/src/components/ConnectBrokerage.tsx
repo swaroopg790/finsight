@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import type { PlaidLinkOnSuccess } from 'react-plaid-link'
 import api from '../lib/api'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 interface Props {
   onSuccess: () => void
@@ -19,6 +20,7 @@ interface Props {
  * Sandbox test credentials: username = user_good, password = pass_good
  */
 export default function ConnectBrokerage({ onSuccess }: Props) {
+  const { isMobile } = useBreakpoint()
   const [linkToken, setLinkToken]   = useState<string | null>(null)
   const [loading, setLoading]       = useState(false)
   const [exchanging, setExchanging] = useState(false)
@@ -65,15 +67,18 @@ export default function ConnectBrokerage({ onSuccess }: Props) {
   const isDisabled = loading || !ready || exchanging
 
   return (
-    <div>
+    <div style={{ width: isMobile ? '100%' : 'auto' }}>
       <button
         onClick={() => open()}
         disabled={isDisabled}
         style={{
           display:      'inline-flex',
           alignItems:   'center',
+          justifyContent: 'center',
           gap:          8,
           padding:      '10px 20px',
+          minHeight:    44,               // WCAG touch target
+          width:        isMobile ? '100%' : 'auto',
           background:   isDisabled ? '#e0e0e0' : '#000',
           color:        isDisabled ? '#888'    : '#fff',
           border:       'none',

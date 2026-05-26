@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../lib/api'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 export default function LoginPage() {
-  const navigate = useNavigate()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const navigate  = useNavigate()
+  const { isMobile } = useBreakpoint()
+
+  const [email,     setEmail]     = useState('')
+  const [password,  setPassword]  = useState('')
+  const [error,     setError]     = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,9 +29,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: '80px auto', padding: '0 24px' }}>
-      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>FinSight</h1>
+    <div style={{
+      maxWidth:  400,
+      margin:    isMobile ? '40px auto' : '80px auto',
+      padding:   '0 24px',
+    }}>
+      <h1 style={{ fontSize: isMobile ? 24 : 28, fontWeight: 700, marginBottom: 8 }}>
+        FinSight
+      </h1>
       <p style={{ color: '#666', marginBottom: 32 }}>Your AI portfolio copilot</p>
+
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: 16 }}>
           <input
@@ -37,7 +47,13 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            style={{ width: '100%', padding: '12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 16, boxSizing: 'border-box' }}
+            style={{
+              width:        '100%',
+              padding:      '14px',          /* taller for touch */
+              borderRadius: 8,
+              border:       '1px solid #ddd',
+              fontSize:     16,              /* prevents iOS zoom on focus */
+            }}
           />
         </div>
         <div style={{ marginBottom: 16 }}>
@@ -47,16 +63,37 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            style={{ width: '100%', padding: '12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 16, boxSizing: 'border-box' }}
+            style={{
+              width:        '100%',
+              padding:      '14px',
+              borderRadius: 8,
+              border:       '1px solid #ddd',
+              fontSize:     16,
+            }}
           />
         </div>
-        {error && <p style={{ color: 'red', marginBottom: 16, fontSize: 14 }}>{error}</p>}
+
+        {error && (
+          <p style={{ color: 'red', marginBottom: 16, fontSize: 14 }}>{error}</p>
+        )}
+
         <button
           type="submit"
           disabled={isLoading}
-          style={{ width: '100%', padding: '12px', background: '#000', color: '#fff', border: 'none', borderRadius: 8, fontSize: 16, cursor: 'pointer' }}
+          style={{
+            width:        '100%',
+            padding:      '14px',           /* min 44px touch target */
+            background:   '#000',
+            color:        '#fff',
+            border:       'none',
+            borderRadius: 8,
+            fontSize:     16,
+            fontWeight:   600,
+            cursor:       isLoading ? 'not-allowed' : 'pointer',
+            opacity:      isLoading ? 0.7 : 1,
+          }}
         >
-          {isLoading ? 'Signing in...' : 'Sign in'}
+          {isLoading ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
     </div>

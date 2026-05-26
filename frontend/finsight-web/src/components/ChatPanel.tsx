@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import api from '../lib/api'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 interface Message {
   role:    'user' | 'assistant'
@@ -18,6 +19,7 @@ const SUGGESTIONS = [
 ]
 
 export default function ChatPanel({ hasHoldings }: Props) {
+  const { isMobile } = useBreakpoint()
   const [open,     setOpen]     = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input,    setInput]    = useState('')
@@ -25,15 +27,21 @@ export default function ChatPanel({ hasHoldings }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
 
-  // Scroll to latest message whenever messages change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  // Focus input when panel opens
   useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 50)
+    if (open) setTimeout(() => inputRef.current?.focus(), 80)
   }, [open])
+
+  // Prevent body scroll when mobile sheet is open
+  useEffect(() => {
+    if (isMobile) {
+      document.body.style.overflow = open ? 'hidden' : ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [open, isMobile])
 
   async function send(text: string) {
     const trimmed = text.trim()
@@ -48,7 +56,6 @@ export default function ChatPanel({ hasHoldings }: Props) {
     try {
       const { data } = await api.post('/chat/message', {
         message: trimmed,
-        // Send prior turns (excluding the message we just added) as history
         conversationHistory: messages.map((m) => ({ role: m.role, content: m.content })),
       })
       setMessages([...nextMessages, { role: 'assistant', content: data.reply }])
@@ -63,80 +70,142 @@ export default function ChatPanel({ hasHoldings }: Props) {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // On mobile, Enter adds a newline (physical keyboard sends via button)
+    if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
       e.preventDefault()
       send(input)
     }
   }
 
-  function clearChat() {
-    setMessages([])
-    setInput('')
-  }
+  // ── Panel dimensions — desktop overlay vs mobile bottom sheet ─────────────
+  const panelStyle: React.CSSProperties = isMobile
+    ? {
+        position:     'fixed',
+        bottom:       0,
+        left:         0,
+        right:        0,
+        width:        '100%',
+        height:       '72vh',
+        borderRadius: '20px 20px 0 0',
+        boxShadow:    '0 -4px 32px rgba(0,0,0,0.18)',
+      }
+    : {
+        position:     'fixed',
+        bottom:       24,
+        right:        24,
+        width:        400,
+        height:       520,
+        borderRadius: 16,
+        boxShadow:    '0 8px 40px rgba(0,0,0,0.18)',
+      }
 
   return (
     <>
-      {/* ── Floating trigger button ──────────────────────────────────────── */}
-      {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          title="Ask the AI Copilot"
+      {/* ── Backdrop for mobile sheet ──────────────────────────────────────── */}
+      {isMobile && open && (
+        <div
+          onClick={() => setOpen(false)}
           style={{
-            position:     'fixed',
-            bottom:       28,
-            right:        28,
-            width:        56,
-            height:       56,
-            borderRadius: '50%',
-            background:   '#1a1a1a',
-            color:        '#fff',
-            border:       'none',
-            fontSize:     24,
-            cursor:       'pointer',
-            boxShadow:    '0 4px 16px rgba(0,0,0,0.25)',
-            display:      'flex',
-            alignItems:   'center',
-            justifyContent: 'center',
-            zIndex:       1000,
-            transition:   'transform 0.15s',
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.4)',
+            zIndex: 999,
           }}
-          onMouseEnter={(e) => ((e.currentTarget.style.transform = 'scale(1.08)'))}
-          onMouseLeave={(e) => ((e.currentTarget.style.transform = 'scale(1)'))}
-        >
-          💬
-        </button>
+        />
       )}
 
-      {/* ── Chat panel ───────────────────────────────────────────────────── */}
+      {/* ── Floating trigger ──────────────────────────────────────────────── */}
+      {!open && (
+        isMobile ? (
+          /* Mobile: full-width bar at the bottom */
+          <button
+            onClick={() => setOpen(true)}
+            style={{
+              position:     'fixed',
+              bottom:       0,
+              left:         0,
+              right:        0,
+              padding:      '14px 20px',
+              background:   '#1a1a1a',
+              color:        '#fff',
+              border:       'none',
+              fontSize:     14,
+              fontWeight:   600,
+              cursor:       'pointer',
+              display:      'flex',
+              alignItems:   'center',
+              justifyContent: 'center',
+              gap:          8,
+              zIndex:       1000,
+              // Safe area padding for iPhone home bar
+              paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
+            }}
+          >
+            💬 Ask AI Copilot
+          </button>
+        ) : (
+          /* Desktop: floating circle button */
+          <button
+            onClick={() => setOpen(true)}
+            title="Ask the AI Copilot"
+            style={{
+              position:     'fixed',
+              bottom:       28,
+              right:        28,
+              width:        56,
+              height:       56,
+              borderRadius: '50%',
+              background:   '#1a1a1a',
+              color:        '#fff',
+              border:       'none',
+              fontSize:     24,
+              cursor:       'pointer',
+              boxShadow:    '0 4px 16px rgba(0,0,0,0.25)',
+              display:      'flex',
+              alignItems:   'center',
+              justifyContent: 'center',
+              zIndex:       1000,
+              transition:   'transform 0.15s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.08)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            💬
+          </button>
+        )
+      )}
+
+      {/* ── Chat panel ────────────────────────────────────────────────────── */}
       {open && (
         <div style={{
-          position:     'fixed',
-          bottom:       24,
-          right:        24,
-          width:        400,
-          height:       520,
-          background:   '#fff',
-          borderRadius: 16,
-          boxShadow:    '0 8px 40px rgba(0,0,0,0.18)',
-          display:      'flex',
+          ...panelStyle,
+          background:  '#fff',
+          display:     'flex',
           flexDirection: 'column',
-          zIndex:       1000,
-          overflow:     'hidden',
-          border:       '1px solid #e5e5e5',
+          zIndex:      1000,
+          overflow:    'hidden',
+          border:      '1px solid #e5e5e5',
         }}>
+          {/* Drag handle for mobile sheet */}
+          {isMobile && (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: '#ddd' }} />
+            </div>
+          )}
 
           {/* Header */}
           <div style={{
-            background: '#1a1a1a',
-            color:      '#fff',
-            padding:    '14px 18px',
-            display:    'flex',
+            background:  '#1a1a1a',
+            color:       '#fff',
+            padding:     isMobile ? '12px 16px' : '14px 18px',
+            display:     'flex',
             justifyContent: 'space-between',
-            alignItems: 'center',
-            flexShrink: 0,
+            alignItems:  'center',
+            flexShrink:  0,
           }}>
             <div>
-              <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>FinSight Copilot</p>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: isMobile ? 15 : 14 }}>
+                FinSight Copilot
+              </p>
               <p style={{ margin: '2px 0 0', fontSize: 11, color: '#aaa' }}>
                 Ask anything about your portfolio
               </p>
@@ -144,11 +213,11 @@ export default function ChatPanel({ hasHoldings }: Props) {
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               {messages.length > 0 && (
                 <button
-                  onClick={clearChat}
-                  title="Clear chat"
+                  onClick={() => setMessages([])}
                   style={{
                     background: 'none', border: 'none', color: '#888',
-                    cursor: 'pointer', fontSize: 12, padding: '2px 6px',
+                    cursor: 'pointer', fontSize: 12, padding: '4px 8px',
+                    minHeight: 36,
                   }}
                 >
                   Clear
@@ -158,7 +227,8 @@ export default function ChatPanel({ hasHoldings }: Props) {
                 onClick={() => setOpen(false)}
                 style={{
                   background: 'none', border: 'none', color: '#fff',
-                  cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: 0,
+                  cursor: 'pointer', fontSize: 22, lineHeight: 1,
+                  padding: '4px 8px', minHeight: 36,
                 }}
               >
                 ×
@@ -168,14 +238,14 @@ export default function ChatPanel({ hasHoldings }: Props) {
 
           {/* Message list */}
           <div style={{
-            flex:       1,
-            overflowY:  'auto',
-            padding:    '16px 16px 8px',
-            display:    'flex',
+            flex:          1,
+            overflowY:     'auto',
+            WebkitOverflowScrolling: 'touch' as never,
+            padding:       isMobile ? '14px 14px 8px' : '16px 16px 8px',
+            display:       'flex',
             flexDirection: 'column',
-            gap:        12,
+            gap:           12,
           }}>
-            {/* Empty state — prompt suggestions */}
             {messages.length === 0 && (
               <div>
                 <p style={{ color: '#888', fontSize: 13, margin: '0 0 12px' }}>
@@ -194,11 +264,12 @@ export default function ChatPanel({ hasHoldings }: Props) {
                       background:   '#f5f5f5',
                       border:       '1px solid #eee',
                       borderRadius: 8,
-                      padding:      '8px 12px',
+                      padding:      '10px 12px',
                       marginBottom: 8,
-                      fontSize:     12,
+                      fontSize:     isMobile ? 13 : 12,
                       color:        '#444',
                       cursor:       'pointer',
+                      minHeight:    44,
                     }}
                   >
                     {s}
@@ -207,14 +278,10 @@ export default function ChatPanel({ hasHoldings }: Props) {
               </div>
             )}
 
-            {/* Conversation bubbles */}
             {messages.map((msg, i) => (
               <div
                 key={i}
-                style={{
-                  alignSelf:    msg.role === 'user' ? 'flex-end' : 'flex-start',
-                  maxWidth:     '85%',
-                }}
+                style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}
               >
                 <div style={{
                   background:   msg.role === 'user' ? '#1a1a1a' : '#f0f0f0',
@@ -222,18 +289,17 @@ export default function ChatPanel({ hasHoldings }: Props) {
                   borderRadius: msg.role === 'user'
                     ? '16px 16px 4px 16px'
                     : '16px 16px 16px 4px',
-                  padding:      '10px 14px',
-                  fontSize:     13,
-                  lineHeight:   1.55,
-                  whiteSpace:   'pre-wrap',
-                  wordBreak:    'break-word',
+                  padding:    '10px 14px',
+                  fontSize:   isMobile ? 14 : 13,
+                  lineHeight: 1.55,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak:  'break-word',
                 }}>
                   {msg.content}
                 </div>
               </div>
             ))}
 
-            {/* Thinking indicator */}
             {loading && (
               <div style={{ alignSelf: 'flex-start' }}>
                 <div style={{
@@ -254,7 +320,7 @@ export default function ChatPanel({ hasHoldings }: Props) {
 
           {/* Input area */}
           <div style={{
-            padding:    '10px 12px',
+            padding:    isMobile ? '10px 12px max(10px, env(safe-area-inset-bottom))' : '10px 12px',
             borderTop:  '1px solid #eee',
             display:    'flex',
             gap:        8,
@@ -267,7 +333,7 @@ export default function ChatPanel({ hasHoldings }: Props) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about your portfolio… (Enter to send)"
+              placeholder={isMobile ? 'Ask about your portfolio…' : 'Ask about your portfolio… (Enter to send)'}
               disabled={loading}
               rows={1}
               style={{
@@ -275,8 +341,8 @@ export default function ChatPanel({ hasHoldings }: Props) {
                 resize:     'none',
                 border:     '1px solid #ddd',
                 borderRadius: 10,
-                padding:    '9px 12px',
-                fontSize:   13,
+                padding:    '10px 12px',
+                fontSize:   16,            // 16px prevents iOS zoom-on-focus
                 fontFamily: 'inherit',
                 outline:    'none',
                 lineHeight: 1.4,
@@ -298,12 +364,13 @@ export default function ChatPanel({ hasHoldings }: Props) {
                 color:        '#fff',
                 border:       'none',
                 borderRadius: 10,
-                padding:      '9px 16px',
+                padding:      '0 16px',
                 fontSize:     13,
                 cursor:       !input.trim() || loading ? 'not-allowed' : 'pointer',
                 fontWeight:   600,
                 flexShrink:   0,
-                height:       38,
+                height:       44,          // touch target
+                minWidth:     64,
               }}
             >
               Send

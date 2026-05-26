@@ -11,4 +11,37 @@ body {
   -webkit-font-smoothing: antialiased;
   background: #ffffff;
   color: #111;
+
+  /* Prevent iOS text-size inflation in landscape */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Smooth momentum scrolling on iOS */
+html {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Remove tap highlight on mobile (we handle focus styles explicitly) */
+button, a, input, textarea, select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Ensure inputs never overflow their container on small screens */
+input, textarea, select {
+  max-width: 100%;
+}
+
+/* Scrollable table containers */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Skeleton shimmer animation — used by InsightsPanel */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }

@@ -5,6 +5,7 @@ import {
   Tooltip, ResponsiveContainer,
 } from 'recharts'
 import api from '../lib/api'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 interface SnapshotPoint {
   date:       string
@@ -31,6 +32,7 @@ const fmtDate = (d: string) => {
 
 export default function PerformanceChart({ hasHoldings }: Props) {
   const [activeDays, setActiveDays] = useState(30)
+  const { isMobile } = useBreakpoint()
 
   const { data = [], isLoading } = useQuery<SnapshotPoint[]>({
     queryKey: ['performance', activeDays],
@@ -40,40 +42,52 @@ export default function PerformanceChart({ hasHoldings }: Props) {
     staleTime: 5 * 60 * 1000,
   })
 
-  // Gain/loss from first → last snapshot in the window
   const gainAmt = data.length >= 2 ? data[data.length - 1].totalValue - data[0].totalValue : null
   const gainPct = data.length >= 2 && data[0].totalValue > 0
     ? ((data[data.length - 1].totalValue - data[0].totalValue) / data[0].totalValue) * 100
     : null
 
+  const chartHeight  = isMobile ? 160 : 200
+  const yAxisWidth   = isMobile ? 56  : 72
+  const tickFontSize = isMobile ? 10  : 11
+
   return (
-    <div style={{ background: '#f5f5f5', borderRadius: 12, padding: 24, marginBottom: 24 }}>
+    <div style={{ background: '#f5f5f5', borderRadius: 12, padding: isMobile ? 16 : 24, marginBottom: 16 }}>
       {/* Header row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: isMobile ? 'flex-start' : 'flex-start',
+        marginBottom: 16,
+        gap: 8,
+        flexWrap: 'wrap',
+      }}>
         <div>
           <p style={{ margin: 0, color: '#666', fontSize: 13 }}>Portfolio Performance</p>
           {gainAmt !== null && gainPct !== null && (
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: gainAmt >= 0 ? '#16a34a' : '#dc2626', fontWeight: 500 }}>
-              {gainAmt >= 0 ? '+' : ''}{fmtUsd(gainAmt)} ({gainAmt >= 0 ? '+' : ''}{gainPct.toFixed(2)}%) this period
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: gainAmt >= 0 ? '#16a34a' : '#dc2626', fontWeight: 500 }}>
+              {gainAmt >= 0 ? '+' : ''}{fmtUsd(gainAmt)} ({gainAmt >= 0 ? '+' : ''}{gainPct.toFixed(2)}%)
             </p>
           )}
         </div>
 
         {/* Period selector */}
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 4 }}>
           {PERIOD_OPTIONS.map(({ label, days }) => (
             <button
               key={days}
               onClick={() => setActiveDays(days)}
               style={{
-                padding:    '4px 10px',
+                padding:      isMobile ? '5px 8px' : '4px 10px',
                 borderRadius: 6,
-                border:     'none',
-                fontSize:   12,
-                cursor:     'pointer',
-                background: activeDays === days ? '#1a1a1a' : '#e5e5e5',
-                color:      activeDays === days ? '#fff'     : '#555',
-                fontWeight: activeDays === days ? 600        : 400,
+                border:       'none',
+                fontSize:     isMobile ? 11 : 12,
+                cursor:       'pointer',
+                background:   activeDays === days ? '#1a1a1a' : '#e5e5e5',
+                color:        activeDays === days ? '#fff'     : '#555',
+                fontWeight:   activeDays === days ? 600        : 400,
+                minHeight:    44,        // touch target
+                minWidth:     isMobile ? 36 : 'auto',
               }}
             >
               {label}
@@ -82,42 +96,42 @@ export default function PerformanceChart({ hasHoldings }: Props) {
         </div>
       </div>
 
-      {/* Chart body */}
       {!hasHoldings ? (
         <p style={{ color: '#bbb', textAlign: 'center', fontSize: 13, margin: '32px 0' }}>
           Connect a brokerage to see your performance chart.
         </p>
       ) : isLoading ? (
-        <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ height: chartHeight, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <p style={{ color: '#bbb', fontSize: 13 }}>Loading chart…</p>
         </div>
       ) : data.length < 2 ? (
         <div style={{
-          height: 180, display: 'flex', alignItems: 'center',
+          height: chartHeight, display: 'flex', alignItems: 'center',
           justifyContent: 'center', flexDirection: 'column', gap: 8,
         }}>
           <p style={{ color: '#888', fontSize: 13, margin: 0 }}>⏳ Not enough data yet</p>
-          <p style={{ color: '#bbb', fontSize: 12, margin: 0 }}>
-            The chart builds up over time — check back after the next scheduled sync.
+          <p style={{ color: '#bbb', fontSize: 12, margin: 0, textAlign: 'center' }}>
+            Chart builds up over time — check back after the next sync.
           </p>
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={200}>
+        <ResponsiveContainer width="100%" height={chartHeight}>
           <LineChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
             <XAxis
               dataKey="date"
               tickFormatter={fmtDate}
-              tick={{ fontSize: 11, fill: '#aaa' }}
+              tick={{ fontSize: tickFontSize, fill: '#aaa' }}
               axisLine={false}
               tickLine={false}
+              interval={isMobile ? 'preserveStartEnd' : 'preserveStart'}
             />
             <YAxis
               tickFormatter={(v) => fmtUsd(Number(v))}
-              tick={{ fontSize: 11, fill: '#aaa' }}
+              tick={{ fontSize: tickFontSize, fill: '#aaa' }}
               axisLine={false}
               tickLine={false}
-              width={72}
+              width={yAxisWidth}
             />
             <Tooltip
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
