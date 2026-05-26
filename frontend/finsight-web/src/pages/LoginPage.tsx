@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Sparkles, Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Sparkles, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react'
 import api from '../lib/api'
 import { colors, radius, shadow } from '../lib/tokens'
 
@@ -8,6 +8,7 @@ export default function LoginPage() {
   const navigate    = useNavigate()
   const [email,     setEmail]     = useState('')
   const [password,  setPassword]  = useState('')
+  const [showPwd,   setShowPwd]   = useState(false)
   const [error,     setError]     = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -115,14 +116,15 @@ export default function LoginPage() {
             <div style={{ position: 'relative' }}>
               <Lock size={16} color={colors.textMuted} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
               <input
-                type="password"
+                type={showPwd ? 'text' : 'password'}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                autoComplete="current-password"
                 style={{
                   width:        '100%',
-                  padding:      '12px 14px 12px 38px',
+                  padding:      '12px 44px 12px 38px',
                   borderRadius: radius.md,
                   border:       `1.5px solid ${colors.border}`,
                   fontSize:     16,
@@ -135,6 +137,18 @@ export default function LoginPage() {
                 onFocus={(e)  => { e.currentTarget.style.borderColor = colors.brand }}
                 onBlur={(e)   => { e.currentTarget.style.borderColor = colors.border }}
               />
+              <button
+                type="button"
+                onClick={() => setShowPwd(v => !v)}
+                tabIndex={-1}
+                style={{
+                  position:   'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color:      colors.textMuted, display: 'flex', alignItems: 'center', padding: 4,
+                }}
+              >
+                {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
             </div>
           </div>
 
@@ -192,8 +206,18 @@ export default function LoginPage() {
             )}
           </button>
 
-          <p style={{ textAlign: 'center', color: colors.textMuted, fontSize: 12, marginTop: 16 }}>
+          <p style={{ textAlign: 'center', color: colors.textMuted, fontSize: 12, marginTop: 16, marginBottom: 0 }}>
             Sandbox: <code style={{ background: '#f1f5f9', padding: '1px 5px', borderRadius: 3 }}>user_good</code> / <code style={{ background: '#f1f5f9', padding: '1px 5px', borderRadius: 3 }}>pass_good</code>
+          </p>
+
+          <p style={{ textAlign: 'center', fontSize: 13, color: colors.textMuted, marginTop: 12, marginBottom: 0 }}>
+            Don't have an account?{' '}
+            <Link
+              to="/signup"
+              style={{ color: colors.brand, fontWeight: 600, textDecoration: 'none' }}
+            >
+              Create account
+            </Link>
           </p>
         </form>
       </div>
