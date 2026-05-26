@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Sparkles, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, CheckCircle2,
@@ -31,6 +31,13 @@ const STRENGTH_META: Record<Strength, { label: string; color: string; bars: numb
 
 export default function SignupPage() {
   const navigate = useNavigate()
+
+  // Clear any stale tokens so a returning user can sign up cleanly
+  // without a leftover Bearer header triggering a 401 on the register endpoint
+  useEffect(() => {
+    localStorage.removeItem('finsight_token')
+    localStorage.removeItem('finsight_refresh_token')
+  }, [])
 
   const [email,           setEmail]           = useState('')
   const [password,        setPassword]        = useState('')

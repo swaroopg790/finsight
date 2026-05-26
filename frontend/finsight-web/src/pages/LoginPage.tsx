@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Sparkles, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react'
 import api from '../lib/api'
@@ -6,6 +6,13 @@ import { colors, radius, shadow } from '../lib/tokens'
 
 export default function LoginPage() {
   const navigate    = useNavigate()
+
+  // Clear stale tokens on mount — a user who lands here should start fresh
+  useEffect(() => {
+    localStorage.removeItem('finsight_token')
+    localStorage.removeItem('finsight_refresh_token')
+  }, [])
+
   const [email,     setEmail]     = useState('')
   const [password,  setPassword]  = useState('')
   const [showPwd,   setShowPwd]   = useState(false)

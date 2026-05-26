@@ -5,10 +5,18 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
+// ── Public auth paths — never send a Bearer token to these ────────────────
+const PUBLIC_PATHS = ['/auth/login', '/auth/register', '/auth/refresh']
+const isPublicPath = (url = '') => PUBLIC_PATHS.some((p) => url.includes(p))
+
 // ── Request interceptor — attach Bearer token ─────────────────────────────
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('finsight_token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
+  // Never attach a stale token to public auth endpoints — Spring Security's
+  // JWT filter validates it even for permitAll paths and returns 401.
+  if (token && !isPublicPath(config.url)) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
   return config
 })
 
