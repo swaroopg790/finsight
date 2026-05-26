@@ -1,16 +1,18 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Sparkles, AlertTriangle, Lightbulb, RotateCw } from 'lucide-react'
 import api from '../lib/api'
+import { colors, radius, shadow } from '../lib/tokens'
 
 interface InsightResponse {
-  summary: string
-  riskFlags: string[]
+  summary:     string
+  riskFlags:   string[]
   suggestions: string[]
   generatedAt: string
 }
 
 function timeAgo(iso: string): string {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
-  if (diff < 60)  return 'just now'
+  if (diff < 60)   return 'just now'
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   return `${Math.floor(diff / 3600)}h ago`
 }
@@ -19,74 +21,95 @@ export default function InsightsPanel({ hasHoldings }: { hasHoldings: boolean })
   const queryClient = useQueryClient()
 
   const { data, isLoading, isError, error } = useQuery<InsightResponse>({
-    queryKey: ['insights'],
-    queryFn:  () => api.get('/insights').then(r => r.data),
-    enabled:  hasHoldings,          // only fetch when there are holdings
-    staleTime: 29 * 60 * 1000,      // mirrors the 30-min server cache
-    retry: false,
+    queryKey:  ['insights'],
+    queryFn:   () => api.get('/insights').then(r => r.data),
+    enabled:   hasHoldings,
+    staleTime: 29 * 60 * 1000,
+    retry:     false,
   })
 
   const handleRefresh = async () => {
-    // Bust the server cache then refetch
     await api.delete('/insights/cache').catch(() => {})
     queryClient.invalidateQueries({ queryKey: ['insights'] })
   }
 
-  // ── Empty state ──────────────────────────────────────────────────────────
+  // ── Shared card wrapper ────────────────────────────────────────────────────
+  const card = (content: React.ReactNode) => (
+    <div style={{
+      background:   colors.surface,
+      borderRadius: radius.lg,
+      padding:      '20px 22px',
+      marginBottom: 16,
+      border:       `1px solid ${colors.border}`,
+      boxShadow:    shadow.sm,
+      display:      'flex',
+      flexDirection:'column',
+      gap:          0,
+    }}>
+      {content}
+    </div>
+  )
+
+  // ── Empty state ────────────────────────────────────────────────────────────
   if (!hasHoldings) {
-    return (
-      <div style={styles.card}>
+    return card(
+      <>
         <Header onRefresh={handleRefresh} refreshDisabled />
-        <p style={styles.muted}>Connect a brokerage account to unlock AI portfolio analysis.</p>
-      </div>
+        <p style={s.muted}>
+          Connect a brokerage account to unlock AI portfolio analysis.
+        </p>
+      </>
     )
   }
 
-  // ── Loading ──────────────────────────────────────────────────────────────
+  // ── Loading ────────────────────────────────────────────────────────────────
   if (isLoading) {
-    return (
-      <div style={styles.card}>
+    return card(
+      <>
         <Header onRefresh={handleRefresh} refreshDisabled />
-        <div style={styles.skeleton}>
-          <div style={{ ...styles.skeletonLine, width: '90%' }} />
-          <div style={{ ...styles.skeletonLine, width: '75%', marginTop: 8 }} />
-          <div style={{ ...styles.skeletonLine, width: '60%', marginTop: 8 }} />
+        <div style={{ padding: '4px 0' }}>
+          <div style={{ ...s.skeletonLine, width: '90%' }} />
+          <div style={{ ...s.skeletonLine, width: '75%', marginTop: 8 }} />
+          <div style={{ ...s.skeletonLine, width: '60%', marginTop: 8 }} />
         </div>
-        <p style={{ ...styles.muted, marginTop: 12 }}>Analysing your portfolio with Llama 3.3…</p>
-      </div>
+        <p style={{ ...s.muted, marginTop: 12 }}>Analysing your portfolio with Llama 3.3…</p>
+      </>
     )
   }
 
-  // ── Service unavailable ──────────────────────────────────────────────────
+  // ── Error ──────────────────────────────────────────────────────────────────
   if (isError) {
     const msg = (error as { response?: { status: number } })?.response?.status === 503
       ? 'AI service is offline. Start the AI service and refresh.'
       : 'Could not load insights. Please try again.'
-    return (
-      <div style={styles.card}>
+    return card(
+      <>
         <Header onRefresh={handleRefresh} />
-        <p style={{ ...styles.muted, color: '#c0392b' }}>{msg}</p>
-      </div>
+        <p style={{ ...s.muted, color: colors.dangerText }}>{msg}</p>
+      </>
     )
   }
 
   if (!data) return null
 
-  // ── Insights ─────────────────────────────────────────────────────────────
-  return (
-    <div style={styles.card}>
+  // ── Insights ───────────────────────────────────────────────────────────────
+  return card(
+    <>
       <Header onRefresh={handleRefresh} generatedAt={data.generatedAt} />
 
       {/* Summary */}
-      <p style={styles.summary}>{data.summary}</p>
+      <p style={s.summary}>{data.summary}</p>
 
       {/* Risk Flags */}
       {data.riskFlags?.length > 0 && (
-        <section style={styles.section}>
-          <p style={styles.sectionLabel}>⚠️ Risk Flags</p>
-          <ul style={styles.list}>
+        <section style={s.section}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <AlertTriangle size={13} color={colors.warning} />
+            <p style={s.sectionLabel}>Risk Flags</p>
+          </div>
+          <ul style={s.list}>
             {data.riskFlags.map((flag, i) => (
-              <li key={i} style={{ ...styles.listItem, ...styles.flagItem }}>{flag}</li>
+              <li key={i} style={{ ...s.listItem, ...s.flagItem }}>{flag}</li>
             ))}
           </ul>
         </section>
@@ -94,114 +117,138 @@ export default function InsightsPanel({ hasHoldings }: { hasHoldings: boolean })
 
       {/* Suggestions */}
       {data.suggestions?.length > 0 && (
-        <section style={styles.section}>
-          <p style={styles.sectionLabel}>💡 Suggestions</p>
-          <ul style={styles.list}>
-            {data.suggestions.map((s, i) => (
-              <li key={i} style={{ ...styles.listItem, ...styles.suggestionItem }}>{s}</li>
+        <section style={s.section}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <Lightbulb size={13} color={colors.success} />
+            <p style={s.sectionLabel}>Suggestions</p>
+          </div>
+          <ul style={s.list}>
+            {data.suggestions.map((suggestion, i) => (
+              <li key={i} style={{ ...s.listItem, ...s.suggestionItem }}>{suggestion}</li>
             ))}
           </ul>
         </section>
       )}
-    </div>
+    </>
   )
 }
 
+// ── Header ─────────────────────────────────────────────────────────────────────
 function Header({
   onRefresh,
   generatedAt,
   refreshDisabled = false,
 }: {
-  onRefresh: () => void
-  generatedAt?: string
+  onRefresh:       () => void
+  generatedAt?:    string
   refreshDisabled?: boolean
 }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-      <div>
-        <span style={{ fontWeight: 700, fontSize: 16 }}>🤖 AI Portfolio Insights</span>
-        {generatedAt && (
-          <span style={{ marginLeft: 10, fontSize: 12, color: '#999' }}>
-            Updated {timeAgo(generatedAt)}
-          </span>
-        )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{
+          width:        28,
+          height:       28,
+          borderRadius: radius.sm,
+          background:   colors.brandBg,
+          display:      'flex',
+          alignItems:   'center',
+          justifyContent: 'center',
+          flexShrink:   0,
+        }}>
+          <Sparkles size={13} color={colors.brand} />
+        </div>
+        <div>
+          <span style={{ fontWeight: 700, fontSize: 14, color: colors.text }}>AI Portfolio Insights</span>
+          {generatedAt && (
+            <span style={{ marginLeft: 8, fontSize: 11, color: colors.textMuted }}>
+              Updated {timeAgo(generatedAt)}
+            </span>
+          )}
+        </div>
       </div>
+
       <button
         onClick={onRefresh}
         disabled={refreshDisabled}
+        title="Refresh insights"
         style={{
-          background: 'none', border: '1px solid #ddd', borderRadius: 6,
-          padding: '5px 12px', fontSize: 12, cursor: refreshDisabled ? 'not-allowed' : 'pointer',
-          color: refreshDisabled ? '#bbb' : '#555',
+          display:     'flex',
+          alignItems:  'center',
+          gap:         5,
+          background:  'none',
+          border:      `1px solid ${colors.border}`,
+          borderRadius: radius.sm,
+          padding:     '5px 10px',
+          fontSize:    12,
+          cursor:      refreshDisabled ? 'not-allowed' : 'pointer',
+          color:       refreshDisabled ? colors.textMuted : colors.textSecondary,
+          transition:  'all 0.15s',
+          minHeight:   30,
         }}
+        onMouseEnter={(e) => { if (!refreshDisabled) { e.currentTarget.style.borderColor = colors.brand; e.currentTarget.style.color = colors.brand } }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = refreshDisabled ? colors.textMuted : colors.textSecondary }}
       >
-        ↻ Refresh
+        <RotateCw size={12} />
+        Refresh
       </button>
     </div>
   )
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-const styles: Record<string, React.CSSProperties> = {
-  card: {
-    border: '1px solid #e8e8e8',
-    borderRadius: 12,
-    padding: '20px 24px',
-    background: '#fafafa',
-    marginBottom: 32,
-  },
+// ── Styles ─────────────────────────────────────────────────────────────────────
+const s: Record<string, React.CSSProperties> = {
   summary: {
-    fontSize: 14,
-    lineHeight: 1.6,
-    color: '#333',
-    margin: '0 0 16px',
+    fontSize:   14,
+    lineHeight: 1.65,
+    color:      colors.textSecondary,
+    margin:     '0 0 14px',
   },
   section: {
     marginTop: 12,
   },
   sectionLabel: {
     fontWeight: 600,
-    fontSize: 13,
-    margin: '0 0 8px',
-    color: '#444',
+    fontSize:   12,
+    margin:     0,
+    color:      colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
   },
   list: {
-    listStyle: 'none',
-    margin: 0,
-    padding: 0,
-    display: 'flex',
+    listStyle:     'none',
+    margin:        0,
+    padding:       0,
+    display:       'flex',
     flexDirection: 'column',
-    gap: 6,
+    gap:           5,
   },
   listItem: {
-    fontSize: 13,
+    fontSize:   13,
     lineHeight: 1.5,
-    padding: '6px 12px',
-    borderRadius: 6,
+    padding:    '7px 12px',
+    borderRadius: radius.sm,
   },
   flagItem: {
-    background: '#fff8e1',
-    color: '#7c5e00',
-    borderLeft: '3px solid #f59e0b',
+    background:  colors.warningBg,
+    color:       colors.warningText,
+    borderLeft:  `3px solid ${colors.warning}`,
   },
   suggestionItem: {
-    background: '#f0fdf4',
-    color: '#14532d',
-    borderLeft: '3px solid #22c55e',
+    background: colors.successBg,
+    color:      colors.successText,
+    borderLeft: `3px solid ${colors.success}`,
   },
   muted: {
     fontSize: 13,
-    color: '#888',
-    margin: 0,
-  },
-  skeleton: {
-    padding: '4px 0',
+    color:    colors.textMuted,
+    margin:   0,
   },
   skeletonLine: {
-    height: 14,
-    background: 'linear-gradient(90deg, #e8e8e8 25%, #f5f5f5 50%, #e8e8e8 75%)',
-    backgroundSize: '200% 100%',
-    borderRadius: 4,
-    animation: 'shimmer 1.5s infinite',
-  },
+    height:          14,
+    background:      'linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)',
+    backgroundSize:  '200% 100%',
+    borderRadius:    radius.xs,
+    animation:       'shimmer 1.5s infinite',
+  } as React.CSSProperties,
 }

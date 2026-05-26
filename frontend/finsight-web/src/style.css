@@ -1,3 +1,27 @@
+/* ── CSS Custom Properties ─────────────────────────────────────────────── */
+:root {
+  --brand:        #4f46e5;
+  --brand-light:  #818cf8;
+  --brand-bg:     #eef2ff;
+  --page-bg:      #f8fafc;
+  --surface:      #ffffff;
+  --text:         #0f172a;
+  --text-sec:     #475569;
+  --text-muted:   #94a3b8;
+  --border:       #e2e8f0;
+  --success:      #16a34a;
+  --danger:       #dc2626;
+  --warning:      #d97706;
+  --radius-sm:    6px;
+  --radius-md:    10px;
+  --radius-lg:    14px;
+  --shadow-sm:    0 1px 4px rgba(0,0,0,0.08);
+  --shadow-md:    0 4px 16px rgba(0,0,0,0.08);
+  --shadow-lg:    0 8px 32px rgba(0,0,0,0.12);
+  --transition:   0.15s ease;
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -6,42 +30,103 @@
   margin: 0;
 }
 
+/* ── Base ──────────────────────────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
 body {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: #ffffff;
-  color: #111;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--page-bg);
+  color: var(--text);
+  line-height: 1.5;
 
   /* Prevent iOS text-size inflation in landscape */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
-/* Smooth momentum scrolling on iOS */
-html {
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Remove tap highlight on mobile (we handle focus styles explicitly) */
+/* ── Interactive elements ──────────────────────────────────────────────── */
 button, a, input, textarea, select {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Ensure inputs never overflow their container on small screens */
 input, textarea, select {
   max-width: 100%;
 }
 
-/* Scrollable table containers */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ── Focus visible — accessible keyboard navigation ───────────────────── */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* ── Scrollable table containers (mobile) ─────────────────────────────── */
 .table-scroll {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-lg);
 }
 
-/* Skeleton shimmer animation — used by InsightsPanel */
+/* ── Custom scrollbar (WebKit) ────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ── Skeleton shimmer animation ───────────────────────────────────────── */
 @keyframes shimmer {
-  0%   { background-position: 200% 0; }
+  0%   { background-position:  200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* ── Fade-in animation ────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.25s ease both;
+}
+
+/* ── Pulse animation (typing dots) ─────────────────────────────────────── */
+@keyframes pulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* ── Spin animation (loading/sync icons) ───────────────────────────────── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Holdings table row hover (cannot be done with inline styles) ──────── */
+.holdings-row:hover {
+  background: #f8fafc !important;
+}
+
+/* ── Nav item active/hover transitions ────────────────────────────────── */
+.nav-item {
+  transition: background var(--transition), color var(--transition);
 }

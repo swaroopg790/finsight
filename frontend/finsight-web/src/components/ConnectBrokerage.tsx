@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import type { PlaidLinkOnSuccess } from 'react-plaid-link'
+import { Plus, Link2 } from 'lucide-react'
 import api from '../lib/api'
 import { useBreakpoint } from '../hooks/useBreakpoint'
+import { colors, radius } from '../lib/tokens'
 
 interface Props {
   onSuccess: () => void
@@ -21,10 +23,10 @@ interface Props {
  */
 export default function ConnectBrokerage({ onSuccess }: Props) {
   const { isMobile } = useBreakpoint()
-  const [linkToken, setLinkToken]   = useState<string | null>(null)
-  const [loading, setLoading]       = useState(false)
+  const [linkToken,  setLinkToken]  = useState<string | null>(null)
+  const [loading,    setLoading]    = useState(false)
   const [exchanging, setExchanging] = useState(false)
-  const [error, setError]           = useState<string | null>(null)
+  const [error,      setError]      = useState<string | null>(null)
 
   // Fetch link token once on mount
   useEffect(() => {
@@ -37,8 +39,6 @@ export default function ConnectBrokerage({ onSuccess }: Props) {
     return () => { cancelled = true }
   }, [])
 
-  // PlaidLinkOnSuccess is (public_token: string, metadata: PlaidLinkOnSuccessMetadata) => void
-  // Must be sync (void, not Promise<void>) — run async work via .then()
   const onPlaidSuccess: PlaidLinkOnSuccess = useCallback(
     (publicToken, metadata) => {
       setExchanging(true)
@@ -57,14 +57,14 @@ export default function ConnectBrokerage({ onSuccess }: Props) {
   )
 
   const { open, ready } = usePlaidLink({
-    token: linkToken,
+    token:    linkToken,
     onSuccess: onPlaidSuccess,
-    onExit: (err) => {
-      if (err) setError('Plaid Link exited with an error.')
-    },
+    onExit:   (err) => { if (err) setError('Plaid Link exited with an error.') },
   })
 
   const isDisabled = loading || !ready || exchanging
+
+  const label = exchanging ? 'Linking…' : loading ? 'Preparing…' : 'Connect Brokerage'
 
   return (
     <div style={{ width: isMobile ? '100%' : 'auto' }}>
@@ -72,28 +72,33 @@ export default function ConnectBrokerage({ onSuccess }: Props) {
         onClick={() => open()}
         disabled={isDisabled}
         style={{
-          display:      'inline-flex',
-          alignItems:   'center',
+          display:        'inline-flex',
+          alignItems:     'center',
           justifyContent: 'center',
-          gap:          8,
-          padding:      '10px 20px',
-          minHeight:    44,               // WCAG touch target
-          width:        isMobile ? '100%' : 'auto',
-          background:   isDisabled ? '#e0e0e0' : '#000',
-          color:        isDisabled ? '#888'    : '#fff',
-          border:       'none',
-          borderRadius: 8,
-          fontSize:     14,
-          fontWeight:   600,
-          cursor:       isDisabled ? 'not-allowed' : 'pointer',
-          transition:   'background 0.15s',
+          gap:            7,
+          padding:        '10px 20px',
+          minHeight:      44,
+          width:          isMobile ? '100%' : 'auto',
+          background:     isDisabled ? '#e2e8f0' : colors.brand,
+          color:          isDisabled ? colors.textMuted : '#fff',
+          border:         'none',
+          borderRadius:   radius.md,
+          fontSize:       14,
+          fontWeight:     600,
+          cursor:         isDisabled ? 'not-allowed' : 'pointer',
+          transition:     'background 0.15s, transform 0.1s',
+          boxShadow:      isDisabled ? 'none' : `0 2px 8px ${colors.brand}40`,
+          letterSpacing:  '-0.2px',
         }}
+        onMouseEnter={(e) => { if (!isDisabled) e.currentTarget.style.background = colors.brandDark }}
+        onMouseLeave={(e) => { if (!isDisabled) e.currentTarget.style.background = colors.brand }}
       >
-        {exchanging ? 'Linking…' : loading ? 'Preparing…' : '+ Connect Brokerage'}
+        {exchanging ? <Link2 size={14} /> : <Plus size={14} />}
+        {label}
       </button>
 
       {error && (
-        <p style={{ color: '#c0392b', fontSize: 13, marginTop: 8, marginBottom: 0 }}>
+        <p style={{ color: colors.dangerText, fontSize: 13, marginTop: 8, marginBottom: 0 }}>
           {error}
         </p>
       )}

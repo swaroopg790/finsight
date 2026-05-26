@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import api from '../lib/api'
 import { useBreakpoint } from '../hooks/useBreakpoint'
+import { colors, radius, shadow, CHART_COLORS } from '../lib/tokens'
 
 interface AllocationItem {
   ticker:    string
@@ -13,11 +14,6 @@ interface AllocationItem {
 interface Props {
   hasHoldings: boolean
 }
-
-const COLORS = [
-  '#1a1a1a', '#4f46e5', '#0891b2', '#16a34a', '#d97706',
-  '#dc2626', '#7c3aed', '#0f766e', '#c2410c', '#1d4ed8',
-]
 
 const fmtUsd = (v: number) =>
   '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -48,35 +44,39 @@ export default function AllocationChart({ hasHoldings }: Props) {
     ]
   }
 
-  const chartHeight  = isMobile ? 200 : 220
-  const outerRadius  = isMobile ? 68  : 80
-  const innerRadius  = isMobile ? 42  : 52
-  const cyPercent    = isMobile ? '42%' : '45%'
+  const chartHeight = isMobile ? 210 : 230
+  const outerRadius = isMobile ? 72  : 84
+  const innerRadius = isMobile ? 44  : 54
+  const cyPercent   = isMobile ? '42%' : '44%'
 
   return (
     <div style={{
-      background:   '#f5f5f5',
-      borderRadius: 12,
+      background:   colors.surface,
+      borderRadius: radius.lg,
       padding:      isMobile ? 16 : 24,
       marginBottom: 16,
+      border:       `1px solid ${colors.border}`,
+      boxShadow:    shadow.sm,
     }}>
-      <p style={{ margin: '0 0 16px', color: '#666', fontSize: 13 }}>Asset Allocation</p>
+      <p style={{ margin: '0 0 16px', color: colors.textSecondary, fontSize: 12, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        Asset Allocation
+      </p>
 
       {!hasHoldings ? (
-        <p style={{ color: '#bbb', textAlign: 'center', fontSize: 13, margin: '32px 0' }}>
+        <p style={{ color: colors.textMuted, textAlign: 'center', fontSize: 13, margin: '40px 0' }}>
           Connect a brokerage to see your allocation.
         </p>
       ) : isLoading ? (
         <div style={{ height: chartHeight, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <p style={{ color: '#bbb', fontSize: 13 }}>Loading…</p>
+          <p style={{ color: colors.textMuted, fontSize: 13 }}>Loading…</p>
         </div>
       ) : chartData.length === 0 ? (
         <div style={{
           height: chartHeight, display: 'flex', alignItems: 'center',
           justifyContent: 'center', flexDirection: 'column', gap: 8,
         }}>
-          <p style={{ color: '#888', fontSize: 13, margin: 0 }}>⏳ No priced positions yet</p>
-          <p style={{ color: '#bbb', fontSize: 12, margin: 0 }}>Sync prices to see your allocation.</p>
+          <p style={{ color: colors.textSecondary, fontSize: 13, margin: 0 }}>⏳ No priced positions yet</p>
+          <p style={{ color: colors.textMuted, fontSize: 12, margin: 0 }}>Sync prices to see your allocation.</p>
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={chartHeight}>
@@ -89,9 +89,10 @@ export default function AllocationChart({ hasHoldings }: Props) {
               outerRadius={outerRadius}
               paddingAngle={2}
               dataKey="value"
+              strokeWidth={0}
             >
               {chartData.map((_, i) => (
-                <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
               ))}
             </Pie>
             <Tooltip
@@ -100,7 +101,13 @@ export default function AllocationChart({ hasHoldings }: Props) {
                 const item = entry?.payload as AllocationItem | undefined
                 return [`${fmtUsd(Number(value))} (${item?.weightPct.toFixed(1) ?? ''}%)`, item?.ticker ?? '']
               }}
-              contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #eee' }}
+              contentStyle={{
+                fontSize:     12,
+                borderRadius: radius.md,
+                border:       `1px solid ${colors.border}`,
+                boxShadow:    shadow.md,
+                fontFamily:   'inherit',
+              }}
             />
             <Legend
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -110,7 +117,7 @@ export default function AllocationChart({ hasHoldings }: Props) {
               }}
               iconSize={8}
               iconType="circle"
-              wrapperStyle={{ fontSize: isMobile ? 10 : 11 }}
+              wrapperStyle={{ fontSize: isMobile ? 10 : 11, fontFamily: 'inherit', color: colors.textSecondary }}
             />
           </PieChart>
         </ResponsiveContainer>

@@ -1,13 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import AllocationChart from '../components/AllocationChart'
-import ChatPanel from '../components/ChatPanel'
-import ConnectBrokerage from '../components/ConnectBrokerage'
-import InsightsPanel from '../components/InsightsPanel'
-import PerformanceChart from '../components/PerformanceChart'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Wallet, TrendingUp, TrendingDown, RefreshCw, Unlink, ChevronUp, ChevronDown,
+} from 'lucide-react'
+import AllocationChart   from '../components/AllocationChart'
+import ChatPanel         from '../components/ChatPanel'
+import ConnectBrokerage  from '../components/ConnectBrokerage'
+import InsightsPanel     from '../components/InsightsPanel'
+import PerformanceChart  from '../components/PerformanceChart'
 import { useBreakpoint } from '../hooks/useBreakpoint'
-import api from '../lib/api'
+import { useCountUp }    from '../hooks/useCountUp'
+import api               from '../lib/api'
+import { colors, radius, shadow } from '../lib/tokens'
 
 interface Holding {
   positionId:            string
@@ -23,22 +27,30 @@ interface Holding {
 }
 
 interface Account {
-  accountId:      string
-  plaidItemId:    string
-  name:           string
-  type:           string
-  balanceCurrent: number
-  currency:       string
+  accountId:       string
+  plaidItemId:     string
+  name:            string
+  type:            string
+  balanceCurrent:  number
+  currency:        string
   institutionName: string
 }
 
+type SortKey = 'value' | 'gain' | 'pct'
+type SortDir = 'asc' | 'desc'
+
+// ── Format helpers ─────────────────────────────────────────────────────────────
+const fmtUsd = (v: number, decimals = 2) =>
+  '$' + v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+
 export default function DashboardPage() {
-  const navigate    = useNavigate()
   const queryClient = useQueryClient()
   const { isMobile, isTablet } = useBreakpoint()
 
-  const [pricesSyncing,  setPricesSyncing]  = useState(false)
+  const [pricesSyncing,   setPricesSyncing]   = useState(false)
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
+  const [sortKey,         setSortKey]         = useState<SortKey>('value')
+  const [sortDir,         setSortDir]         = useState<SortDir>('desc')
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { data: holdings = [], isLoading: holdingsLoading } = useQuery<Holding[]>({
@@ -103,19 +115,17 @@ export default function DashboardPage() {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
   }, [])
 
-  const handleLogout = async () => {
-    api.post('/auth/logout').catch(() => {})
-    localStorage.removeItem('finsight_token')
-    localStorage.removeItem('finsight_refresh_token')
-    navigate('/login')
-  }
-
+  // ── Derived values ─────────────────────────────────────────────────────────
   const pricedCount  = holdings.filter(h => h.currentValue != null).length
   const pendingCount = holdings.filter(h => h.currentValue == null).length
   const allPriceless = holdings.length > 0 && pricedCount === 0
 
-  const totalValue    = holdings.reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
+  const totalValue    = holdings.reduce((sum, h) => sum + (h.currentValue    ?? 0), 0)
   const totalGainLoss = holdings.reduce((sum, h) => sum + (h.unrealizedGainLoss ?? 0), 0)
+  const isGain        = totalGainLoss >= 0
+
+  // Animated counter for total value
+  const animatedValue = useCountUp(totalValue)
 
   // Dedup accounts by institution for Disconnect button
   const institutionMap = accounts.reduce<Record<string, { plaidItemId: string; name: string }>>((acc, a) => {
@@ -123,47 +133,53 @@ export default function DashboardPage() {
     return acc
   }, {})
 
-  // ── Responsive values ────────────────────────────────────────────────────
-  const outerPadding   = isMobile ? '16px 16px' : '32px 24px'
-  const headerFontSize = isMobile ? 22 : 28
-  const cardPadding    = isMobile ? 16 : 24
-  const valueFontSize  = isMobile ? 28 : 36
-  // Extra bottom padding on mobile so holdings table doesn't sit under the chat bar
-  const bottomPadding  = isMobile ? 80 : 0
+  // ── Sortable holdings ──────────────────────────────────────────────────────
+  const sortedHoldings = useMemo(() => {
+    const sorted = [...holdings].sort((a, b) => {
+      let aVal = 0, bVal = 0
+      if (sortKey === 'value') { aVal = a.currentValue ?? -Infinity; bVal = b.currentValue ?? -Infinity }
+      if (sortKey === 'gain')  { aVal = a.unrealizedGainLoss ?? -Infinity; bVal = b.unrealizedGainLoss ?? -Infinity }
+      if (sortKey === 'pct')   { aVal = a.unrealizedGainLossPct ?? -Infinity; bVal = b.unrealizedGainLossPct ?? -Infinity }
+      return sortDir === 'desc' ? bVal - aVal : aVal - bVal
+    })
+    return sorted
+  }, [holdings, sortKey, sortDir])
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+    } else {
+      setSortKey(key)
+      setSortDir('desc')
+    }
+  }
+
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ChevronDown size={12} color={colors.textMuted} style={{ opacity: 0.4 }} />
+    return sortDir === 'desc'
+      ? <ChevronDown size={12} color={colors.brand} />
+      : <ChevronUp   size={12} color={colors.brand} />
+  }
+
+  // ── Layout values ──────────────────────────────────────────────────────────
+  const outerPadding  = isMobile ? '16px' : '28px 32px'
+  const cardPadding   = isMobile ? 18 : 24
+  const valueFontSize = isMobile ? 30 : 38
 
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto', padding: outerPadding, paddingBottom: bottomPadding }}>
+    <div style={{ maxWidth: 1000, margin: '0 auto', padding: outerPadding }}>
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div style={{
-        display:        'flex',
-        justifyContent: 'space-between',
-        alignItems:     'center',
-        marginBottom:   isMobile ? 20 : 32,
-      }}>
-        <div>
-          <h1 style={{ fontSize: headerFontSize, fontWeight: 700, margin: 0 }}>FinSight</h1>
-          <p style={{ color: '#666', margin: '4px 0 0', fontSize: isMobile ? 12 : 14 }}>
-            AI Portfolio Copilot
-          </p>
-        </div>
-        <button
-          onClick={handleLogout}
-          style={{
-            background:   'none',
-            border:       '1px solid #ddd',
-            borderRadius: 8,
-            padding:      '8px 14px',
-            cursor:       'pointer',
-            fontSize:     isMobile ? 13 : 14,
-            minHeight:    44,
-          }}
-        >
-          Sign out
-        </button>
+      {/* ── Page title ─────────────────────────────────────────────────────── */}
+      <div style={{ marginBottom: isMobile ? 18 : 24 }}>
+        <h1 style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, margin: 0, letterSpacing: '-0.5px', color: colors.text }}>
+          Portfolio Overview
+        </h1>
+        <p style={{ color: colors.textMuted, margin: '3px 0 0', fontSize: 13 }}>
+          All your investments in one place
+        </p>
       </div>
 
-      {/* ── Price sync banner ──────────────────────────────────────────── */}
+      {/* ── Price sync banner ──────────────────────────────────────────────── */}
       {(pricesSyncing || allPriceless) && (
         <div style={{
           display:        'flex',
@@ -171,85 +187,138 @@ export default function DashboardPage() {
           justifyContent: 'space-between',
           alignItems:     isMobile ? 'flex-start' : 'center',
           gap:            isMobile ? 10 : 0,
-          background:     '#fffbeb',
-          border:         '1px solid #fde68a',
-          borderRadius:   10,
+          background:     colors.warningBg,
+          border:         `1px solid #fde68a`,
+          borderRadius:   radius.md,
           padding:        '10px 16px',
           marginBottom:   16,
           fontSize:       13,
         }}>
-          <span style={{ color: '#92400e' }}>
+          <span style={{ color: colors.warningText, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <RefreshCw size={14} style={{ animation: pricesSyncing ? 'spin 1s linear infinite' : 'none' }} />
             {pricesSyncing
-              ? '⏳ Fetching market prices from Polygon.io…'
-              : '⚠️ Market prices not yet available — sync to load Polygon.io data.'}
+              ? 'Fetching market prices from Polygon.io…'
+              : 'Market prices not yet available — sync to load Polygon.io data.'}
           </span>
           {!pricesSyncing && (
             <button
               onClick={handleSyncPrices}
               style={{
-                background:   '#f59e0b',
+                background:   colors.warning,
                 color:        '#fff',
                 border:       'none',
-                borderRadius: 6,
+                borderRadius: radius.sm,
                 padding:      '8px 16px',
                 fontSize:     13,
+                fontWeight:   600,
                 cursor:       'pointer',
-                minHeight:    44,
+                minHeight:    40,
                 alignSelf:    isMobile ? 'stretch' : 'auto',
+                display:      'flex',
+                alignItems:   'center',
+                justifyContent: 'center',
+                gap:          6,
               }}
             >
+              <RefreshCw size={13} />
               Sync Prices
             </button>
           )}
         </div>
       )}
 
-      {/* ── Portfolio Summary cards ────────────────────────────────────── */}
+      {/* ── Summary cards ──────────────────────────────────────────────────── */}
       <div style={{
         display:             'grid',
         gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
         gap:                 12,
-        marginBottom:        16,
+        marginBottom:        20,
       }}>
-        <div style={{ background: '#f5f5f5', borderRadius: 12, padding: cardPadding }}>
-          <p style={{ margin: 0, color: '#666', fontSize: 13 }}>Total Portfolio Value</p>
-          <p style={{ margin: '8px 0 0', fontSize: valueFontSize, fontWeight: 700 }}>
-            ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        {/* Total Value card */}
+        <div style={{
+          background:   colors.surface,
+          borderRadius: radius.lg,
+          padding:      cardPadding,
+          border:       `1px solid ${colors.border}`,
+          boxShadow:    shadow.sm,
+          borderTop:    `3px solid ${colors.brand}`,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+            <p style={{ margin: 0, color: colors.textSecondary, fontSize: 12, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Total Portfolio Value
+            </p>
+            <div style={{
+              width:          32,
+              height:         32,
+              borderRadius:   radius.sm,
+              background:     colors.brandBg,
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+            }}>
+              <Wallet size={15} color={colors.brand} />
+            </div>
+          </div>
+          <p style={{ margin: 0, fontSize: valueFontSize, fontWeight: 800, letterSpacing: '-1px', color: colors.text, lineHeight: 1 }}>
+            ${animatedValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
           {pendingCount > 0 && (
-            <p style={{ margin: '4px 0 0', fontSize: 11, color: '#aaa' }}>
+            <p style={{ margin: '6px 0 0', fontSize: 11, color: colors.textMuted }}>
               +{pendingCount} position{pendingCount > 1 ? 's' : ''} awaiting market data
             </p>
           )}
         </div>
+
+        {/* Unrealized Gain/Loss card */}
         <div style={{
-          background:   totalGainLoss >= 0 ? '#f0fdf4' : '#fef2f2',
-          borderRadius: 12,
+          background:   colors.surface,
+          borderRadius: radius.lg,
           padding:      cardPadding,
+          border:       `1px solid ${colors.border}`,
+          boxShadow:    shadow.sm,
+          borderTop:    `3px solid ${isGain ? colors.success : colors.danger}`,
         }}>
-          <p style={{ margin: 0, color: '#666', fontSize: 13 }}>Unrealised Gain / Loss</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+            <p style={{ margin: 0, color: colors.textSecondary, fontSize: 12, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Unrealised Gain / Loss
+            </p>
+            <div style={{
+              width:          32,
+              height:         32,
+              borderRadius:   radius.sm,
+              background:     isGain ? colors.successBg : colors.dangerBg,
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+            }}>
+              {isGain
+                ? <TrendingUp   size={15} color={colors.success} />
+                : <TrendingDown size={15} color={colors.danger}  />}
+            </div>
+          </div>
           <p style={{
-            margin:     '8px 0 0',
+            margin:     0,
             fontSize:   valueFontSize,
-            fontWeight: 700,
-            color:      totalGainLoss >= 0 ? '#16a34a' : '#dc2626',
+            fontWeight: 800,
+            letterSpacing: '-1px',
+            color:      isGain ? colors.success : colors.danger,
+            lineHeight: 1,
           }}>
-            {totalGainLoss >= 0 ? '+' : ''}
-            ${totalGainLoss.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {isGain ? '+' : ''}
+            {fmtUsd(totalGainLoss)}
           </p>
           {pendingCount > 0 && (
-            <p style={{ margin: '4px 0 0', fontSize: 11, color: '#aaa' }}>
+            <p style={{ margin: '6px 0 0', fontSize: 11, color: colors.textMuted }}>
               Based on {pricedCount} priced position{pricedCount !== 1 ? 's' : ''}
             </p>
           )}
         </div>
       </div>
 
-      {/* ── Performance Chart — full width ────────────────────────────── */}
+      {/* ── Performance chart (full width) ─────────────────────────────────── */}
       <PerformanceChart hasHoldings={holdings.length > 0} />
 
-      {/* ── Allocation + AI Insights ──────────────────────────────────── */}
-      {/* Stack on mobile/tablet, side-by-side on wide desktop */}
+      {/* ── Allocation + AI Insights ────────────────────────────────────────── */}
       <div style={{
         display:             'grid',
         gridTemplateColumns: isTablet ? '1fr' : '1fr 1fr',
@@ -260,62 +329,83 @@ export default function DashboardPage() {
         <InsightsPanel   hasHoldings={holdings.length > 0} />
       </div>
 
-      {/* ── Connected Accounts ─────────────────────────────────────────── */}
+      {/* ── Connected Accounts ──────────────────────────────────────────────── */}
       <div style={{
         display:        'flex',
         flexDirection:  isMobile ? 'column' : 'row',
         justifyContent: 'space-between',
         alignItems:     isMobile ? 'stretch' : 'center',
         gap:            isMobile ? 10 : 0,
-        marginBottom:   16,
+        marginBottom:   14,
         marginTop:      8,
       }}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Connected Accounts</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: colors.text, letterSpacing: '-0.3px' }}>
+          Connected Accounts
+        </h2>
         <ConnectBrokerage onSuccess={handleBrokerageConnected} />
       </div>
 
       {accountsLoading ? (
-        <p style={{ color: '#888' }}>Loading accounts…</p>
+        <p style={{ color: colors.textMuted, fontSize: 13 }}>Loading accounts…</p>
       ) : accounts.length === 0 ? (
         <div style={{
-          border:       '1px dashed #ddd',
-          borderRadius: 12,
+          border:       `1.5px dashed ${colors.border}`,
+          borderRadius: radius.lg,
           padding:      isMobile ? 24 : 32,
           textAlign:    'center',
-          marginBottom: 32,
+          marginBottom: 28,
+          background:   colors.surface,
         }}>
-          <p style={{ color: '#666', margin: 0 }}>No accounts connected yet.</p>
-          <p style={{ color: '#999', fontSize: 13, marginTop: 4 }}>
-            Click <strong>+ Connect Brokerage</strong> above to link your first account.
+          <p style={{ color: colors.textSecondary, margin: 0, fontSize: 14 }}>No accounts connected yet.</p>
+          <p style={{ color: colors.textMuted, fontSize: 12, marginTop: 4 }}>
+            Click <strong style={{ color: colors.brand }}>Connect Brokerage</strong> above to link your first account.
           </p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 10, marginBottom: 32 }}>
+        <div style={{ display: 'grid', gap: 8, marginBottom: 28 }}>
           {accounts.map((a) => (
             <div
               key={a.accountId}
               style={{
-                border:        '1px solid #eee',
-                borderRadius:  10,
+                background:    colors.surface,
+                border:        `1px solid ${colors.border}`,
+                borderRadius:  radius.md,
                 padding:       isMobile ? '12px 14px' : '14px 20px',
                 display:       'flex',
-                justifyContent: 'space-between',
+                justifyContent:'space-between',
                 alignItems:    'center',
                 gap:           12,
                 flexWrap:      'wrap',
+                transition:    'box-shadow 0.15s',
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.boxShadow = shadow.sm)}
+              onMouseLeave={(e) => (e.currentTarget.style.boxShadow = 'none')}
             >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontWeight: 600, fontSize: isMobile ? 14 : 15 }}>
-                  {a.name}
-                </p>
-                <p style={{ margin: '3px 0 0', color: '#888', fontSize: 12 }}>
-                  {a.institutionName} · {a.type}
-                </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                <div style={{
+                  width:          36,
+                  height:         36,
+                  borderRadius:   radius.sm,
+                  background:     colors.brandBg,
+                  display:        'flex',
+                  alignItems:     'center',
+                  justifyContent: 'center',
+                  flexShrink:     0,
+                }}>
+                  <Wallet size={16} color={colors.brand} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {a.name}
+                  </p>
+                  <p style={{ margin: '2px 0 0', color: colors.textMuted, fontSize: 12 }}>
+                    {a.institutionName} · {a.type}
+                  </p>
+                </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                <p style={{ margin: 0, fontWeight: 600, fontSize: isMobile ? 15 : 17 }}>
-                  ${(a.balanceCurrent ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                <p style={{ margin: 0, fontWeight: 700, fontSize: isMobile ? 15 : 16, color: colors.text }}>
+                  {fmtUsd(a.balanceCurrent ?? 0)}
                 </p>
                 {institutionMap[a.plaidItemId] && (
                   <button
@@ -323,16 +413,24 @@ export default function DashboardPage() {
                     disabled={disconnectingId === a.plaidItemId}
                     title={`Disconnect ${a.institutionName}`}
                     style={{
-                      background:   'none',
-                      border:       '1px solid #fca5a5',
-                      borderRadius: 6,
-                      padding:      '6px 12px',
-                      fontSize:     12,
-                      cursor:       disconnectingId === a.plaidItemId ? 'wait' : 'pointer',
-                      color:        disconnectingId === a.plaidItemId ? '#aaa' : '#dc2626',
-                      minHeight:    36,
+                      display:     'flex',
+                      alignItems:  'center',
+                      gap:         5,
+                      background:  'none',
+                      border:      `1px solid #fca5a5`,
+                      borderRadius: radius.sm,
+                      padding:     '6px 11px',
+                      fontSize:    12,
+                      cursor:      disconnectingId === a.plaidItemId ? 'wait' : 'pointer',
+                      color:       disconnectingId === a.plaidItemId ? colors.textMuted : colors.danger,
+                      minHeight:   34,
+                      transition:  'background 0.15s',
+                      fontWeight:  500,
                     }}
+                    onMouseEnter={(e) => { if (disconnectingId !== a.plaidItemId) e.currentTarget.style.background = colors.dangerBg }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
                   >
+                    <Unlink size={12} />
                     {disconnectingId === a.plaidItemId ? 'Removing…' : 'Disconnect'}
                   </button>
                 )}
@@ -342,69 +440,164 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Holdings Table ─────────────────────────────────────────────── */}
-      <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>Holdings</h2>
+      {/* ── Holdings Table ──────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: colors.text, letterSpacing: '-0.3px' }}>
+          Holdings
+        </h2>
+        {holdings.length > 0 && (
+          <span style={{ fontSize: 12, color: colors.textMuted }}>
+            {pricedCount} of {holdings.length} priced
+          </span>
+        )}
+      </div>
 
       {holdingsLoading ? (
-        <p style={{ color: '#888' }}>Loading holdings…</p>
+        <p style={{ color: colors.textMuted, fontSize: 13 }}>Loading holdings…</p>
       ) : holdings.length === 0 ? (
-        <p style={{ color: '#666' }}>
-          No holdings found. Connect a brokerage account to see your positions.
-        </p>
+        <div style={{
+          border:       `1.5px dashed ${colors.border}`,
+          borderRadius: radius.lg,
+          padding:      isMobile ? 24 : 32,
+          textAlign:    'center',
+          background:   colors.surface,
+          marginBottom: 24,
+        }}>
+          <p style={{ color: colors.textSecondary, margin: 0, fontSize: 14 }}>
+            No holdings found. Connect a brokerage account to see your positions.
+          </p>
+        </div>
       ) : (
-        /* Horizontal scroll wrapper — table is full-fidelity on mobile */
-        <div className="table-scroll">
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 560 : 'auto' }}>
+        <div className="table-scroll" style={{ marginBottom: isMobile ? 0 : 32 }}>
+          <table style={{
+            width:           '100%',
+            borderCollapse:  'collapse',
+            minWidth:        isMobile ? 560 : 'auto',
+            background:      colors.surface,
+            borderRadius:    radius.lg,
+            overflow:        'hidden',
+            border:          `1px solid ${colors.border}`,
+            boxShadow:       shadow.sm,
+          }}>
             <thead>
-              <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
+              <tr style={{ background: '#f8fafc', borderBottom: `1.5px solid ${colors.border}` }}>
                 <th style={thStyle}>TICKER</th>
-                {/* Hide NAME + ACCOUNT columns on mobile to reduce scroll distance */}
                 {!isMobile && <th style={thStyle}>NAME</th>}
                 {!isMobile && <th style={thStyle}>ACCOUNT</th>}
                 <th style={{ ...thStyle, textAlign: 'right' }}>PRICE</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>VALUE</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>GAIN / LOSS</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>RETURN %</th>
+                <th
+                  style={{ ...thStyle, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => handleSort('value')}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: sortKey === 'value' ? colors.brand : colors.textMuted }}>
+                    VALUE <SortIcon col="value" />
+                  </span>
+                </th>
+                <th
+                  style={{ ...thStyle, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => handleSort('gain')}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: sortKey === 'gain' ? colors.brand : colors.textMuted }}>
+                    GAIN / LOSS <SortIcon col="gain" />
+                  </span>
+                </th>
+                <th
+                  style={{ ...thStyle, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => handleSort('pct')}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: sortKey === 'pct' ? colors.brand : colors.textMuted }}>
+                    RETURN % <SortIcon col="pct" />
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {holdings.map((h) => {
-                const gainLoss  = h.unrealizedGainLoss ?? null
-                const pct       = h.unrealizedGainLossPct
+              {sortedHoldings.map((h, idx) => {
+                const gainLoss  = h.unrealizedGainLoss    ?? null
+                const pct       = h.unrealizedGainLossPct ?? null
                 const hasPrice  = h.currentValue != null
-                const gainColor = gainLoss != null && gainLoss >= 0 ? '#16a34a' : '#dc2626'
+                const positive  = gainLoss != null && gainLoss >= 0
                 return (
-                  <tr key={h.positionId} style={{ borderBottom: '1px solid #f5f5f5' }}>
-                    <td style={{ padding: isMobile ? '10px 8px' : '12px', fontWeight: 700, fontFamily: 'monospace', fontSize: isMobile ? 13 : 14 }}>
-                      {h.ticker}
+                  <tr
+                    key={h.positionId}
+                    className="holdings-row"
+                    style={{
+                      borderBottom: idx < sortedHoldings.length - 1 ? `1px solid ${colors.border}` : 'none',
+                    }}
+                  >
+                    {/* Ticker */}
+                    <td style={{ padding: isMobile ? '11px 12px' : '13px 16px' }}>
+                      <span style={{
+                        display:        'inline-block',
+                        background:     colors.brandBg,
+                        color:          colors.brand,
+                        borderRadius:   radius.xs,
+                        padding:        '2px 7px',
+                        fontSize:       isMobile ? 12 : 13,
+                        fontWeight:     700,
+                        fontFamily:     'monospace',
+                        letterSpacing:  '0.3px',
+                      }}>
+                        {h.ticker}
+                      </span>
                     </td>
+
+                    {/* Name */}
                     {!isMobile && (
-                      <td style={{ padding: '12px', color: '#555', fontSize: 14 }}>
-                        {h.name ?? '—'}
+                      <td style={{ padding: '13px 12px', color: colors.textSecondary, fontSize: 13, maxWidth: 180 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                          {h.name ?? '—'}
+                        </span>
                       </td>
                     )}
+
+                    {/* Account */}
                     {!isMobile && (
-                      <td style={{ padding: '12px', color: '#888', fontSize: 13 }}>
+                      <td style={{ padding: '13px 12px', color: colors.textMuted, fontSize: 12 }}>
                         {h.accountName}
                       </td>
                     )}
-                    <td style={{ padding: isMobile ? '10px 8px' : '12px', textAlign: 'right', color: hasPrice ? '#333' : '#bbb', fontSize: 13 }}>
+
+                    {/* Price */}
+                    <td style={{ padding: isMobile ? '11px 10px' : '13px 12px', textAlign: 'right', color: hasPrice ? colors.text : colors.textMuted, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
                       {h.currentPrice != null
-                        ? `$${Number(h.currentPrice).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                        ? fmtUsd(Number(h.currentPrice))
                         : '—'}
                     </td>
-                    <td style={{ padding: isMobile ? '10px 8px' : '12px', textAlign: 'right', fontWeight: 600, color: hasPrice ? '#333' : '#bbb', fontSize: 13 }}>
+
+                    {/* Value */}
+                    <td style={{ padding: isMobile ? '11px 10px' : '13px 12px', textAlign: 'right', fontWeight: 600, color: hasPrice ? colors.text : colors.textMuted, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
                       {hasPrice
-                        ? `$${Number(h.currentValue).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
-                        : 'Loading…'}
+                        ? fmtUsd(Number(h.currentValue))
+                        : <span style={{ color: colors.textMuted, fontSize: 11, fontStyle: 'italic' }}>Pending</span>}
                     </td>
-                    <td style={{ padding: isMobile ? '10px 8px' : '12px', textAlign: 'right', color: gainLoss != null ? gainColor : '#bbb', fontWeight: 500, fontSize: 13 }}>
-                      {gainLoss != null
-                        ? `${gainLoss >= 0 ? '+' : ''}$${gainLoss.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
-                        : '—'}
+
+                    {/* Gain/Loss */}
+                    <td style={{ padding: isMobile ? '11px 10px' : '13px 12px', textAlign: 'right', fontWeight: 500, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+                      {gainLoss != null ? (
+                        <span style={{ color: positive ? colors.success : colors.danger }}>
+                          {gainLoss >= 0 ? '+' : ''}
+                          {fmtUsd(gainLoss)}
+                        </span>
+                      ) : <span style={{ color: colors.textMuted }}>—</span>}
                     </td>
-                    <td style={{ padding: isMobile ? '10px 8px' : '12px', textAlign: 'right', color: pct != null ? gainColor : '#bbb', fontWeight: 600, fontSize: 13 }}>
-                      {pct != null ? `${pct >= 0 ? '+' : ''}${Number(pct).toFixed(2)}%` : '—'}
+
+                    {/* Return % pill */}
+                    <td style={{ padding: isMobile ? '11px 10px' : '13px 16px', textAlign: 'right' }}>
+                      {pct != null ? (
+                        <span style={{
+                          display:       'inline-block',
+                          padding:       '3px 8px',
+                          borderRadius:  radius.full,
+                          fontSize:      12,
+                          fontWeight:    700,
+                          background:    positive ? colors.successBg : colors.dangerBg,
+                          color:         positive ? colors.successText : colors.dangerText,
+                          fontVariantNumeric: 'tabular-nums',
+                        }}>
+                          {pct >= 0 ? '+' : ''}{Number(pct).toFixed(2)}%
+                        </span>
+                      ) : <span style={{ color: colors.textMuted, fontSize: 13 }}>—</span>}
                     </td>
                   </tr>
                 )
@@ -414,15 +607,19 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── AI Chat Copilot — floating widget / mobile bottom sheet ────── */}
+      {/* ── AI Chat Copilot ─────────────────────────────────────────────────── */}
       <ChatPanel hasHoldings={holdings.length > 0} />
     </div>
   )
 }
 
+// ── Table header cell style ────────────────────────────────────────────────────
 const thStyle: React.CSSProperties = {
-  padding:    '8px 12px',
-  fontSize:   12,
-  color:      '#888',
-  fontWeight: 600,
+  padding:       '10px 12px',
+  fontSize:      11,
+  color:         colors.textMuted,
+  fontWeight:    600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.5px',
+  whiteSpace:    'nowrap',
 }
