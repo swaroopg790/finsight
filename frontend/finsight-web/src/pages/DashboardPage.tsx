@@ -12,6 +12,7 @@ import { useBreakpoint } from '../hooks/useBreakpoint'
 import { useCountUp }    from '../hooks/useCountUp'
 import api               from '../lib/api'
 import { colors, radius, shadow } from '../lib/tokens'
+import { liveRefetchInterval } from '../lib/marketHours'
 
 interface Holding {
   positionId:            string
@@ -56,6 +57,8 @@ export default function DashboardPage() {
   const { data: holdings = [], isLoading: holdingsLoading } = useQuery<Holding[]>({
     queryKey: ['holdings'],
     queryFn:  () => api.get('/portfolio/holdings').then((r) => r.data),
+    // Auto-refresh every 30 s during NYSE market hours; pauses outside hours
+    refetchInterval: liveRefetchInterval(),
   })
 
   const { data: accounts = [], isLoading: accountsLoading } = useQuery<Account[]>({

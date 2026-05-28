@@ -10,6 +10,7 @@ import retrofit2.Response;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -129,6 +130,53 @@ public class SandboxPlaidGateway implements PlaidGateway {
                     .toList();
         } catch (IOException e) {
             throw new IllegalStateException("Plaid investmentsHoldingsGet failed", e);
+        }
+    }
+
+    @Override
+    public List<TransactionData> fetchInvestmentTransactions(String accessToken,
+                                                              LocalDate startDate,
+                                                              LocalDate endDate) {
+        log.debug("Fetching Plaid investment transactions {} → {}", startDate, endDate);
+        try {
+            InvestmentsTransactionsGetRequest request = new InvestmentsTransactionsGetRequest()
+                    .accessToken(accessToken)
+                    .startDate(startDate)
+                    .endDate(endDate);
+
+            Response<InvestmentsTransactionsGetResponse> response =
+                    plaidApi.investmentsTransactionsGet(request).execute();
+
+            InvestmentsTransactionsGetResponse body =
+                    requireBody(response, "investmentsTransactionsGet");
+
+            Map<String, Security> securityMap = body.getSecurities().stream()
+                    .collect(Collectors.toMap(Security::getSecurityId, Function.identity()));
+
+            return body.getInvestmentTransactions().stream()
+                    .map(t -> {
+                        Security sec = t.getSecurityId() != null
+                                ? securityMap.get(t.getSecurityId()) : null;
+                        String ticker = sec != null && sec.getTickerSymbol() != null
+                                ? sec.getTickerSymbol().toUpperCase() : null;
+                        String name   = sec != null ? sec.getName() : t.getName();
+
+                        return new TransactionData(
+                                t.getAccountId(),
+                                t.getInvestmentTransactionId(),
+                                ticker,
+                                name,
+                                t.getType() != null ? t.getType().getValue() : "other",
+                                toBigDecimal(t.getQuantity()),
+                                toBigDecimal(t.getPrice()),
+                                toBigDecimal(t.getAmount()),
+                                t.getDate()
+                        );
+                    })
+                    .toList();
+
+        } catch (IOException e) {
+            throw new IllegalStateException("Plaid investmentsTransactionsGet failed", e);
         }
     }
 

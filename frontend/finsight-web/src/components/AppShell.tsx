@@ -1,13 +1,17 @@
 import {
   LayoutDashboard,
-  LineChart,
+  Receipt,
+  Bell,
   MessageCircle,
   LogOut,
   UserCircle,
   Sparkles,
+  Sun,
+  Moon,
 } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { ChatProvider, useChatContext } from '../contexts/ChatContext'
+import { ThemeProvider, useTheme }       from '../contexts/ThemeContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 import api from '../lib/api'
 import {
@@ -17,16 +21,18 @@ import {
 
 // ── Nav items definition ──────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { label: 'Portfolio',  icon: LineChart,       path: null },  // future route
+  { label: 'Dashboard',    icon: LayoutDashboard, path: '/'             },
+  { label: 'Transactions', icon: Receipt,          path: '/transactions' },
+  { label: 'Alerts',       icon: Bell,             path: '/alerts'      },
 ]
 
-// ── Inner shell (has access to ChatContext) ───────────────────────────────────
+// ── Inner shell (has access to ChatContext + ThemeContext) ────────────────────
 function ShellInner({ children }: { children: React.ReactNode }) {
   const navigate  = useNavigate()
   const location  = useLocation()
   const { isMobile } = useBreakpoint()
   const { setChatOpen } = useChatContext()
+  const { isDark, toggleTheme } = useTheme()
 
   function handleLogout() {
     api.post('/auth/logout').catch(() => {})
@@ -71,27 +77,50 @@ function ShellInner({ children }: { children: React.ReactNode }) {
             </span>
           </div>
 
-          {/* Logout */}
-          <button
-            onClick={handleLogout}
-            title="Sign out"
-            style={{
-              background:   'none',
-              border:       '1px solid #334155',
-              borderRadius: radius.sm,
-              padding:      '6px 12px',
-              color:        colors.sidebarText,
-              cursor:       'pointer',
-              fontSize:     12,
-              display:      'flex',
-              alignItems:   'center',
-              gap:          6,
-              minHeight:    36,
-            }}
-          >
-            <LogOut size={13} />
-            Sign out
-          </button>
+          {/* Right controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Dark mode toggle */}
+            <button
+              onClick={toggleTheme}
+              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              style={{
+                background:   'none',
+                border:       '1px solid #334155',
+                borderRadius: radius.sm,
+                padding:      '6px 9px',
+                color:        colors.sidebarText,
+                cursor:       'pointer',
+                display:      'flex',
+                alignItems:   'center',
+                justifyContent: 'center',
+                minHeight:    36,
+              }}
+            >
+              {isDark ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+
+            {/* Logout */}
+            <button
+              onClick={handleLogout}
+              title="Sign out"
+              style={{
+                background:   'none',
+                border:       '1px solid #334155',
+                borderRadius: radius.sm,
+                padding:      '6px 12px',
+                color:        colors.sidebarText,
+                cursor:       'pointer',
+                fontSize:     12,
+                display:      'flex',
+                alignItems:   'center',
+                gap:          6,
+                minHeight:    36,
+              }}
+            >
+              <LogOut size={13} />
+              Sign out
+            </button>
+          </div>
         </header>
 
         {/* ── Page content ────────────────────────────────────────────── */}
@@ -163,12 +192,10 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           </p>
           {NAV_ITEMS.map(({ label, icon: Icon, path }) => {
             const active = path === location.pathname
-            const disabled = path === null
             return (
               <button
                 key={label}
-                onClick={() => { if (path) navigate(path) }}
-                disabled={disabled}
+                onClick={() => navigate(path)}
                 className="nav-item"
                 style={{
                   display:     'flex',
@@ -177,9 +204,9 @@ function ShellInner({ children }: { children: React.ReactNode }) {
                   padding:     '9px 10px',
                   borderRadius: radius.sm,
                   border:      'none',
-                  cursor:      disabled ? 'default' : 'pointer',
+                  cursor:      'pointer',
                   background:  active ? colors.sidebarActiveBg : 'transparent',
-                  color:       active ? colors.sidebarTextActive : disabled ? '#475569' : colors.sidebarText,
+                  color:       active ? colors.sidebarTextActive : colors.sidebarText,
                   fontSize:    14,
                   fontWeight:  active ? 600 : 400,
                   width:       '100%',
@@ -188,26 +215,14 @@ function ShellInner({ children }: { children: React.ReactNode }) {
               >
                 <Icon size={16} />
                 {label}
-                {disabled && (
-                  <span style={{
-                    marginLeft: 'auto',
-                    fontSize: 9,
-                    fontWeight: 600,
-                    letterSpacing: '0.5px',
-                    textTransform: 'uppercase',
-                    color: '#475569',
-                    background: '#1e293b',
-                    padding: '2px 5px',
-                    borderRadius: 4,
-                  }}>Soon</span>
-                )}
               </button>
             )
           })}
         </nav>
 
-        {/* User / Logout */}
+        {/* User / Dark toggle / Logout */}
         <div style={{ padding: '12px 10px 20px', borderTop: `1px solid ${colors.sidebarBorder}` }}>
+          {/* User info */}
           <div style={{
             display:     'flex',
             alignItems:  'center',
@@ -238,6 +253,32 @@ function ShellInner({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
+          {/* Dark mode toggle */}
+          <button
+            onClick={toggleTheme}
+            className="nav-item"
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            style={{
+              display:     'flex',
+              alignItems:  'center',
+              gap:         10,
+              padding:     '9px 10px',
+              borderRadius: radius.sm,
+              border:      'none',
+              cursor:      'pointer',
+              background:  'transparent',
+              color:       colors.sidebarText,
+              fontSize:    14,
+              width:       '100%',
+              textAlign:   'left',
+              marginBottom: 2,
+            }}
+          >
+            {isDark ? <Sun size={16} /> : <Moon size={16} />}
+            {isDark ? 'Light mode' : 'Dark mode'}
+          </button>
+
+          {/* Sign out */}
           <button
             onClick={handleLogout}
             className="nav-item"
@@ -280,9 +321,9 @@ function MobileBottomNav({ onChat, activePath }: { onChat: () => void; activePat
   const navigate = useNavigate()
 
   const items = [
-    { label: 'Dashboard', icon: LayoutDashboard, path: '/',    action: () => navigate('/') },
-    { label: 'Copilot',   icon: MessageCircle,   path: null,   action: onChat },
-    { label: 'Portfolio', icon: LineChart,        path: null,   action: () => {} },
+    { label: 'Dashboard',    icon: LayoutDashboard, path: '/',             action: () => navigate('/') },
+    { label: 'Transactions', icon: Receipt,          path: '/transactions', action: () => navigate('/transactions') },
+    { label: 'Copilot',      icon: MessageCircle,   path: null,            action: onChat },
   ]
 
   return (
@@ -292,13 +333,12 @@ function MobileBottomNav({ onChat, activePath }: { onChat: () => void; activePat
       left:            0,
       right:           0,
       height:          BOTTOMNAV_H,
-      background:      '#fff',
-      borderTop:       '1px solid #e2e8f0',
+      background:      colors.surface,
+      borderTop:       `1px solid ${colors.border}`,
       display:         'flex',
       alignItems:      'stretch',
       zIndex:          900,
       boxShadow:       '0 -2px 12px rgba(0,0,0,0.06)',
-      // iPhone home indicator safe area
       paddingBottom:   'env(safe-area-inset-bottom)',
     }}>
       {items.map(({ label, icon: Icon, path, action }) => {
@@ -332,11 +372,13 @@ function MobileBottomNav({ onChat, activePath }: { onChat: () => void; activePat
   )
 }
 
-// ── Public export: wraps children with ChatProvider ───────────────────────────
+// ── Public export: wraps children with ThemeProvider + ChatProvider ───────────
 export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <ChatProvider>
-      <ShellInner>{children}</ShellInner>
-    </ChatProvider>
+    <ThemeProvider>
+      <ChatProvider>
+        <ShellInner>{children}</ShellInner>
+      </ChatProvider>
+    </ThemeProvider>
   )
 }

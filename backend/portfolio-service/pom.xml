@@ -67,6 +67,12 @@
 			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
 
+		<!-- Email (graceful fallback: logs when SMTP is not configured) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+
 		<!-- Plaid Java SDK -->
 		<dependency>
 			<groupId>com.plaid</groupId>

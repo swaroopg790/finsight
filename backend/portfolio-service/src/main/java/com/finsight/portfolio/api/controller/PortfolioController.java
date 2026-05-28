@@ -3,7 +3,7 @@ package com.finsight.portfolio.api.controller;
 import com.finsight.portfolio.api.dto.response.AccountResponse;
 import com.finsight.portfolio.api.dto.response.AllocationItem;
 import com.finsight.portfolio.api.dto.response.HoldingResponse;
-import com.finsight.portfolio.api.dto.response.SnapshotPoint;
+import com.finsight.portfolio.api.dto.response.PerformanceResponse;
 import com.finsight.portfolio.domain.service.PortfolioService;
 import com.finsight.portfolio.infrastructure.market.PriceEnrichmentService;
 import lombok.RequiredArgsConstructor;
@@ -35,11 +35,16 @@ public class PortfolioController {
     }
 
     /**
-     * Returns daily portfolio value snapshots for the past N days (default 30).
-     * Sparse for new users — scheduler records one point every 4 hours.
+     * Returns daily portfolio value snapshots plus SPY and QQQ benchmark overlays
+     * for the past N days (default 30).
+     *
+     * All three series share the same dollar Y-axis: benchmarks are normalised
+     * to the portfolio's Day-0 value for the requested period.
+     *
+     * Sparse for new users — the scheduler records one snapshot per 4-hour run.
      */
     @GetMapping("/performance")
-    public List<SnapshotPoint> getPerformance(
+    public PerformanceResponse getPerformance(
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(defaultValue = "30") int days) {
         int clampedDays = Math.max(7, Math.min(365, days));

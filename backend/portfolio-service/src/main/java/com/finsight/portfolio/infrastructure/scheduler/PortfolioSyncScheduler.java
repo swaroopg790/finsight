@@ -7,9 +7,14 @@ import com.finsight.portfolio.domain.repository.PlaidItemRepository;
 import com.finsight.portfolio.domain.repository.PortfolioSnapshotRepository;
 import com.finsight.portfolio.domain.repository.PositionRepository;
 import com.finsight.portfolio.domain.repository.UserRepository;
+import com.finsight.portfolio.domain.service.AlertService;
+import com.finsight.portfolio.domain.service.BenchmarkService;
 import com.finsight.portfolio.domain.service.PlaidService;
+import com.finsight.portfolio.domain.service.TransactionService;
 import com.finsight.portfolio.infrastructure.ai.AiInsightClient;
+import com.finsight.portfolio.infrastructure.crypto.EncryptionService;
 import com.finsight.portfolio.infrastructure.market.PolygonClient;
+import com.finsight.portfolio.infrastructure.plaid.PlaidGateway;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -17,6 +22,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -44,8 +50,24 @@ public class PortfolioSyncScheduler {
     private final PlaidService               plaidService;
     private final PolygonClient              polygonClient;
     private final AiInsightClient            aiInsightClient;
+    private final TransactionService         transactionService;
+    private final BenchmarkService           benchmarkService;
+    private final AlertService               alertService;
+    private final PlaidGateway               plaidGateway;
+    private final EncryptionService          encryptionService;
 
-    /** Plaid sync + price enrichment + snapshot recording + AI cache invalidation every 4 hours. */
+    /**
+     * Main sync job — runs every 4 hours.
+     *
+     * Steps:
+     *   1. Re-sync accounts + holdings from Plaid for every active item
+     *   2. Sync investment transactions (last 90 days, idempotent)
+     *   3. Enrich position prices from Polygon.io (previous-day close)
+     *   4. Record daily portfolio value snapshots
+     *   5. Refresh benchmark (SPY / QQQ) data
+     *   6. Check PORTFOLIO_DROP alerts
+     *   7. Invalidate AI insight caches
+     */
     @Scheduled(fixedRateString = "PT4H")
     public void syncAllPortfolios() {
         List<PlaidItem> activeItems =
@@ -58,7 +80,7 @@ public class PortfolioSyncScheduler {
 
         log.info("Scheduled sync starting for {} active Plaid items", activeItems.size());
 
-        // ── Step 1: Plaid sync ───────────────────────────────────────────────
+        // ── Step 1: Plaid holdings + accounts sync ───────────────────────────
         int syncOk = 0, syncFail = 0;
         for (PlaidItem item : activeItems) {
             try {
@@ -74,13 +96,38 @@ public class PortfolioSyncScheduler {
         }
         log.info("Plaid sync complete — ok={} failed={}", syncOk, syncFail);
 
-        // ── Step 2: Polygon price enrichment ────────────────────────────────
+        // ── Step 2: Transaction sync ─────────────────────────────────────────
+        for (PlaidItem item : activeItems) {
+            if (item.getStatus() == PlaidItem.PlaidItemStatus.ERROR) continue;
+            try {
+                String accessToken = encryptionService.decrypt(item.getAccessTokenEncrypted());
+                transactionService.syncTransactions(item, accessToken, plaidGateway);
+            } catch (Exception e) {
+                log.warn("Transaction sync failed for item={}: {}", item.getId(), e.getMessage());
+            }
+        }
+
+        // ── Step 3: Polygon price enrichment ────────────────────────────────
         enrichPricesFromPolygon();
 
-        // ── Step 3: Record daily portfolio snapshots ─────────────────────────
+        // ── Step 4: Record daily portfolio snapshots ─────────────────────────
         recordDailySnapshots();
 
-        // ── Step 4: Invalidate AI insight caches ────────────────────────────
+        // ── Step 5: Benchmark data refresh (SPY + QQQ, last 90 days) ────────
+        try {
+            benchmarkService.syncBenchmarks(90);
+        } catch (Exception e) {
+            log.warn("Benchmark sync failed: {}", e.getMessage());
+        }
+
+        // ── Step 6: Check PORTFOLIO_DROP alerts ──────────────────────────────
+        try {
+            alertService.checkPortfolioDropAlerts();
+        } catch (Exception e) {
+            log.warn("Alert check failed: {}", e.getMessage());
+        }
+
+        // ── Step 7: Invalidate AI insight caches ────────────────────────────
         activeItems.stream()
                 .map(item -> item.getUser().getId().toString())
                 .distinct()
@@ -90,6 +137,20 @@ public class PortfolioSyncScheduler {
                 });
 
         log.info("Scheduled sync fully complete");
+    }
+
+    /**
+     * Weekly summary emails — fires every Monday at 08:00 UTC.
+     * Sends portfolio summaries to all users with WEEKLY_SUMMARY alerts enabled.
+     */
+    @Scheduled(cron = "0 0 8 * * MON")
+    public void sendWeeklySummaries() {
+        log.info("Weekly summary job starting");
+        try {
+            alertService.sendWeeklySummaries();
+        } catch (Exception e) {
+            log.error("Weekly summary job failed: {}", e.getMessage());
+        }
     }
 
     /**

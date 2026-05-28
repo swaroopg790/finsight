@@ -66,6 +66,11 @@ finsight:
     mode: ${PLAID_MODE:mock}
   polygon:
     api-key: ${POLYGON_API_KEY:}
+  mail:
+    from: ${FINSIGHT_MAIL_FROM:noreply@finsight.io}
+    # true  → log emails to console instead of sending (local dev default)
+    # false → send via SMTP configured below (set in production)
+    dev-mode: ${FINSIGHT_MAIL_DEV:true}
   ai-service:
     url: ${AI_SERVICE_URL:http://localhost:8000}
 

@@ -5,6 +5,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -71,6 +73,41 @@ public class PlaidClient implements PlaidGateway {
                 holding(roth,      "VXUS",  "Vanguard Intl ETF", 100,   53.00,   58.20),
                 holding(roth,      "FBTC",  "Fidelity Bitcoin",    5,   42.00,   98.50)
         );
+    }
+
+    @Override
+    public List<TransactionData> fetchInvestmentTransactions(String accessToken,
+                                                              LocalDate startDate,
+                                                              LocalDate endDate) {
+        String suffix    = suffix(accessToken);
+        String brokerage = "mock-brokerage-" + suffix;
+        String roth      = "mock-roth-"      + suffix;
+        log.info("[MOCK] Fetching investment transactions for token suffix={}", suffix);
+
+        List<TransactionData> txns = new ArrayList<>();
+        // Generate realistic mock transactions spread over the last 90 days
+        LocalDate base = LocalDate.now();
+        String prefix  = "mock-txn-" + suffix + "-";
+
+        txns.add(new TransactionData(brokerage, prefix + "1",  "AAPL",  "Apple Inc.",      "buy",      new BigDecimal("10"),  new BigDecimal("148.00"), new BigDecimal("-1480.00"), base.minusDays(85)));
+        txns.add(new TransactionData(brokerage, prefix + "2",  "MSFT",  "Microsoft Corp.", "buy",      new BigDecimal("5"),   new BigDecimal("265.00"), new BigDecimal("-1325.00"), base.minusDays(80)));
+        txns.add(new TransactionData(brokerage, prefix + "3",  "NVDA",  "NVIDIA Corp.",    "buy",      new BigDecimal("10"),  new BigDecimal("425.00"), new BigDecimal("-4250.00"), base.minusDays(75)));
+        txns.add(new TransactionData(brokerage, prefix + "4",  "VTI",   "Vanguard Total",  "buy",      new BigDecimal("50"),  new BigDecimal("198.00"), new BigDecimal("-9900.00"), base.minusDays(70)));
+        txns.add(new TransactionData(brokerage, prefix + "5",  "AAPL",  "Apple Inc.",      "buy",      new BigDecimal("40"),  new BigDecimal("152.00"), new BigDecimal("-6080.00"), base.minusDays(60)));
+        txns.add(new TransactionData(brokerage, prefix + "6",  "AMZN",  "Amazon.com Inc.", "buy",      new BigDecimal("15"),  new BigDecimal("128.00"), new BigDecimal("-1920.00"), base.minusDays(55)));
+        txns.add(new TransactionData(brokerage, prefix + "7",  "VTI",   "Vanguard Total",  "dividend", null,                  null,                     new BigDecimal("47.20"),   base.minusDays(45)));
+        txns.add(new TransactionData(brokerage, prefix + "8",  "VTI",   "Vanguard Total",  "buy",      new BigDecimal("100"), new BigDecimal("200.00"), new BigDecimal("-20000.00"),base.minusDays(40)));
+        txns.add(new TransactionData(roth,      prefix + "9",  "GOOGL", "Alphabet Inc.",   "buy",      new BigDecimal("30"),  new BigDecimal("122.00"), new BigDecimal("-3660.00"), base.minusDays(35)));
+        txns.add(new TransactionData(roth,      prefix + "10", "BND",   "Vanguard Bond",   "buy",      new BigDecimal("200"), new BigDecimal("71.50"),  new BigDecimal("-14300.00"),base.minusDays(30)));
+        txns.add(new TransactionData(roth,      prefix + "11", "BND",   "Vanguard Bond",   "dividend", null,                  null,                     new BigDecimal("32.50"),   base.minusDays(20)));
+        txns.add(new TransactionData(roth,      prefix + "12", "VXUS",  "Vanguard Intl",   "buy",      new BigDecimal("100"), new BigDecimal("53.00"),  new BigDecimal("-5300.00"), base.minusDays(15)));
+        txns.add(new TransactionData(roth,      prefix + "13", "FBTC",  "Fidelity Bitcoin","buy",      new BigDecimal("5"),   new BigDecimal("42.00"),  new BigDecimal("-210.00"),  base.minusDays(10)));
+        txns.add(new TransactionData(brokerage, prefix + "14", "NVDA",  "NVIDIA Corp.",    "buy",      new BigDecimal("10"),  new BigDecimal("850.00"), new BigDecimal("-8500.00"), base.minusDays(5)));
+
+        // Filter to requested date range
+        return txns.stream()
+                .filter(t -> !t.date().isBefore(startDate) && !t.date().isAfter(endDate))
+                .toList();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

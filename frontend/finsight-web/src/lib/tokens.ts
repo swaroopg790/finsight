@@ -1,16 +1,22 @@
 // ── FinSight Design Tokens ─────────────────────────────────────────────────
 // Single source of truth for all visual constants.
-// Components import from here — never hardcode colours or spacing inline.
+//
+// Theme strategy:
+//   - Brand colours (indigo) are hex — they never change between light/dark.
+//   - Semantic / chrome colours use CSS variables — they flip automatically
+//     when <html data-theme="dark"> is set by ThemeContext.
+//   - Recharts SVG attributes can't resolve CSS vars; use chartColors from
+//     useTheme() for any fill/stroke values passed into recharts components.
 
 export const colors = {
-  // Brand — Indigo
+  // ── Brand (hex — safe to interpolate: e.g. `${colors.brand}50`) ─────────
   brand:       '#4f46e5',
   brandLight:  '#818cf8',
   brandDark:   '#3730a3',
-  brandBg:     '#eef2ff',
-  brandBorder: '#c7d2fe',
+  brandBg:     'var(--color-brand-bg)',
+  brandBorder: 'var(--color-brand-border)',
 
-  // Sidebar
+  // ── Sidebar (always dark — no theme switch needed) ───────────────────────
   sidebar:           '#0f172a',
   sidebarHover:      '#1e293b',
   sidebarActive:     '#1e293b',
@@ -19,31 +25,31 @@ export const colors = {
   sidebarTextActive: '#ffffff',
   sidebarBorder:     '#1e293b',
 
-  // Page chrome
-  pageBg:   '#f8fafc',
-  surface:  '#ffffff',
-  surfaceHover: '#f8fafc',
+  // ── Page chrome (theme-sensitive → CSS vars) ─────────────────────────────
+  pageBg:       'var(--color-page-bg)',
+  surface:      'var(--color-surface)',
+  surfaceHover: 'var(--color-surface-hover)',
 
-  // Text
-  text:          '#0f172a',
-  textSecondary: '#475569',
-  textMuted:     '#94a3b8',
+  // ── Text (theme-sensitive → CSS vars) ────────────────────────────────────
+  text:          'var(--color-text)',
+  textSecondary: 'var(--color-text-secondary)',
+  textMuted:     'var(--color-text-muted)',
   textInverted:  '#ffffff',
 
-  // Borders
-  border:      '#e2e8f0',
-  borderHover: '#cbd5e1',
+  // ── Borders (theme-sensitive → CSS vars) ─────────────────────────────────
+  border:      'var(--color-border)',
+  borderHover: 'var(--color-border-hover)',
 
-  // Semantic
-  success:    '#16a34a',
-  successBg:  '#dcfce7',
-  successText:'#15803d',
-  danger:     '#dc2626',
-  dangerBg:   '#fee2e2',
-  dangerText: '#b91c1c',
-  warning:    '#d97706',
-  warningBg:  '#fef3c7',
-  warningText:'#92400e',
+  // ── Semantic (hex for text/icon colours; CSS var for backgrounds) ─────────
+  success:     '#16a34a',
+  successBg:   'var(--color-success-bg)',
+  successText: '#15803d',
+  danger:      '#dc2626',
+  dangerBg:    'var(--color-danger-bg)',
+  dangerText:  '#b91c1c',
+  warning:     '#d97706',
+  warningBg:   'var(--color-warning-bg)',
+  warningText: '#92400e',
 }
 
 export const radius = {

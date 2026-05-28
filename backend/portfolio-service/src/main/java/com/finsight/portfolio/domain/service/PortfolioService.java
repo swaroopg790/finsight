@@ -3,7 +3,7 @@ package com.finsight.portfolio.domain.service;
 import com.finsight.portfolio.api.dto.response.AccountResponse;
 import com.finsight.portfolio.api.dto.response.AllocationItem;
 import com.finsight.portfolio.api.dto.response.HoldingResponse;
-import com.finsight.portfolio.api.dto.response.SnapshotPoint;
+import com.finsight.portfolio.api.dto.response.PerformanceResponse;
 import com.finsight.portfolio.domain.model.Position;
 import com.finsight.portfolio.domain.repository.AccountRepository;
 import com.finsight.portfolio.domain.repository.PortfolioSnapshotRepository;
@@ -26,6 +26,7 @@ public class PortfolioService {
     private final PositionRepository         positionRepository;
     private final AccountRepository          accountRepository;
     private final PortfolioSnapshotRepository snapshotRepository;
+    private final BenchmarkService           benchmarkService;
 
     // ── Holdings ─────────────────────────────────────────────────────────────
 
@@ -58,15 +59,35 @@ public class PortfolioService {
     // ── Performance chart ─────────────────────────────────────────────────────
 
     /**
-     * Returns daily portfolio value snapshots for the past {@code days} calendar days.
-     * The chart will be sparse for new users (scheduler records one point per run).
+     * Returns daily portfolio value snapshots plus SPY and QQQ benchmark overlays
+     * for the past {@code days} calendar days.
+     *
+     * Both benchmarks are normalised to the portfolio's starting value so all three
+     * series can be plotted on the same dollar Y-axis.
+     *
+     * Sparse for new users — the scheduler records one snapshot per 4-hour run.
      */
     @Transactional(readOnly = true)
-    public List<SnapshotPoint> getPerformance(UUID userId, int days) {
+    public PerformanceResponse getPerformance(UUID userId, int days) {
         LocalDate since = LocalDate.now().minusDays(days);
-        return snapshotRepository.findByUserIdSince(userId, since).stream()
-                .map(s -> new SnapshotPoint(s.getSnapshotDate(), s.getTotalValue()))
+
+        List<PerformanceResponse.DataPoint> portfolio = snapshotRepository
+                .findByUserIdSince(userId, since).stream()
+                .map(s -> new PerformanceResponse.DataPoint(s.getSnapshotDate(), s.getTotalValue()))
                 .toList();
+
+        // Normalise benchmarks to the portfolio's Day-0 value.
+        // If the portfolio has no data yet, benchmarks are returned empty (graceful for new users).
+        BigDecimal portfolioStartValue = portfolio.isEmpty()
+                ? BigDecimal.ZERO
+                : portfolio.get(0).value();
+
+        List<PerformanceResponse.DataPoint> spy = benchmarkService.getNormalizedSeries(
+                "SPY", since, portfolioStartValue);
+        List<PerformanceResponse.DataPoint> qqq = benchmarkService.getNormalizedSeries(
+                "QQQ", since, portfolioStartValue);
+
+        return new PerformanceResponse(portfolio, spy, qqq);
     }
 
     // ── Asset allocation ──────────────────────────────────────────────────────

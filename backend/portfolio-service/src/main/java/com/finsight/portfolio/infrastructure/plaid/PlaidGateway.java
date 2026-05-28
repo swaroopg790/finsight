@@ -29,6 +29,14 @@ public interface PlaidGateway {
      */
     List<HoldingData> fetchHoldings(String accessToken);
 
+    /**
+     * Fetches investment transactions for an item within a date range.
+     * Returns at most 500 transactions per call (paging not implemented for MVP).
+     */
+    List<TransactionData> fetchInvestmentTransactions(String accessToken,
+                                                       java.time.LocalDate startDate,
+                                                       java.time.LocalDate endDate);
+
     // ── Value objects ────────────────────────────────────────────────────────
 
     record ExchangeResult(String accessToken, String itemId) {}
@@ -50,5 +58,17 @@ public interface PlaidGateway {
             BigDecimal quantity,
             BigDecimal costBasis,       // total cost basis (not per-share)
             BigDecimal currentPrice
+    ) {}
+
+    record TransactionData(
+            String     plaidAccountId,
+            String     plaidTransactionId,
+            String     ticker,
+            String     securityName,
+            String     type,            // buy, sell, dividend, fee, transfer, other
+            BigDecimal quantity,
+            BigDecimal price,
+            BigDecimal amount,          // negative = cash out (buy)
+            java.time.LocalDate date
     ) {}
 }
