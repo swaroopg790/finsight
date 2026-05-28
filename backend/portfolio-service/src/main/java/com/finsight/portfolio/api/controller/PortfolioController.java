@@ -51,7 +51,8 @@ public class PortfolioController {
     public PerformanceResponse getPerformance(
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(defaultValue = "30") int days) {
-        int clampedDays = Math.max(7, Math.min(365, days));
+        // Allow up to 5Y (1825 days); minimum 1 day for the 1D period option
+        int clampedDays = Math.max(1, Math.min(1825, days));
         return portfolioService.getPerformance(UUID.fromString(jwt.getSubject()), clampedDays);
     }
 
@@ -93,7 +94,7 @@ public class PortfolioController {
         UUID userId = UUID.fromString(jwt.getSubject());
         plaidService.syncAllItemsForUser(userId);
         portfolioService.recordSnapshotForUser(userId);
-        benchmarkService.syncBenchmarks(90);
+        benchmarkService.syncBenchmarks(365); // cover 1Y so the 1Y period selector has data
         return Map.of(
                 "status",  "accepted",
                 "message", "Sync complete — refresh the page to see updated data"

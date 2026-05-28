@@ -100,7 +100,7 @@ public class PortfolioSyncScheduler {
 
         // ── Step 4: Benchmark data refresh (SPY + QQQ, last 90 days) ────────
         try {
-            benchmarkService.syncBenchmarks(90);
+            benchmarkService.syncBenchmarks(365);
         } catch (Exception e) {
             log.warn("Benchmark sync failed: {}", e.getMessage());
         }
