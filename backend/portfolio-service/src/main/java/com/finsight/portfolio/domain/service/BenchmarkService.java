@@ -75,8 +75,12 @@ public class BenchmarkService {
      * Returns a normalised benchmark series for {@code ticker} starting from {@code since}.
      *
      * The first available bar is scaled so its value equals {@code portfolioStartValue}.
-     * All subsequent bars are scaled by the same factor. Returns an empty list if there are
-     * no stored bars or the portfolio start value is zero.
+     * All subsequent bars are scaled by the same factor.
+     *
+     * <p>Falls back to a direct Polygon call (which uses deterministic mock bars in dev
+     * when POLYGON_API_KEY is blank) if the DB has no rows for the requested range.
+     * This ensures the chart renders immediately after brokerage connection, without
+     * waiting for the 4-hour scheduler to populate benchmark_snapshots.
      *
      * @param ticker              "SPY" or "QQQ"
      * @param since               inclusive start date
@@ -86,24 +90,36 @@ public class BenchmarkService {
     public List<PerformanceResponse.DataPoint> getNormalizedSeries(
             String ticker, LocalDate since, BigDecimal portfolioStartValue) {
 
-        List<BenchmarkSnapshot> snapshots = benchmarkRepository.findByTickerSince(ticker, since);
-
-        if (snapshots.isEmpty()
-                || portfolioStartValue == null
+        if (portfolioStartValue == null
                 || portfolioStartValue.compareTo(BigDecimal.ZERO) == 0) {
             return List.of();
         }
 
-        BigDecimal firstClose = snapshots.get(0).getClosePrice();
+        // Prefer DB-cached bars; fall back to live Polygon (or mock) when not yet populated
+        List<BenchmarkSnapshot> snapshots = benchmarkRepository.findByTickerSince(ticker, since);
+
+        final List<PolygonClient.DailyBar> bars;
+        if (snapshots.isEmpty()) {
+            log.debug("No DB bars for {} since {} — fetching from Polygon (mock in dev)", ticker, since);
+            bars = polygonClient.getDailyRange(ticker, since, LocalDate.now());
+        } else {
+            bars = snapshots.stream()
+                    .map(s -> new PolygonClient.DailyBar(s.getSnapshotDate(), s.getClosePrice()))
+                    .toList();
+        }
+
+        if (bars.isEmpty()) return List.of();
+
+        BigDecimal firstClose = bars.get(0).close();
         if (firstClose.compareTo(BigDecimal.ZERO) == 0) return List.of();
 
         // scaleFactor = portfolioStartValue / firstBarClose
         BigDecimal scaleFactor = portfolioStartValue.divide(firstClose, 8, RoundingMode.HALF_UP);
 
-        return snapshots.stream()
-                .map(s -> new PerformanceResponse.DataPoint(
-                        s.getSnapshotDate(),
-                        s.getClosePrice()
+        return bars.stream()
+                .map(b -> new PerformanceResponse.DataPoint(
+                        b.date(),
+                        b.close()
                                 .multiply(scaleFactor)
                                 .setScale(2, RoundingMode.HALF_UP)
                 ))

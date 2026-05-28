@@ -4,21 +4,27 @@ import com.finsight.portfolio.api.dto.response.AccountResponse;
 import com.finsight.portfolio.api.dto.response.AllocationItem;
 import com.finsight.portfolio.api.dto.response.HoldingResponse;
 import com.finsight.portfolio.api.dto.response.PerformanceResponse;
+import com.finsight.portfolio.domain.model.PortfolioSnapshot;
 import com.finsight.portfolio.domain.model.Position;
+import com.finsight.portfolio.domain.model.User;
 import com.finsight.portfolio.domain.repository.AccountRepository;
 import com.finsight.portfolio.domain.repository.PortfolioSnapshotRepository;
 import com.finsight.portfolio.domain.repository.PositionRepository;
+import com.finsight.portfolio.domain.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PortfolioService {
@@ -27,6 +33,7 @@ public class PortfolioService {
     private final AccountRepository          accountRepository;
     private final PortfolioSnapshotRepository snapshotRepository;
     private final BenchmarkService           benchmarkService;
+    private final UserRepository             userRepository;
 
     // ── Holdings ─────────────────────────────────────────────────────────────
 
@@ -65,7 +72,11 @@ public class PortfolioService {
      * Both benchmarks are normalised to the portfolio's starting value so all three
      * series can be plotted on the same dollar Y-axis.
      *
-     * Sparse for new users — the scheduler records one snapshot per 4-hour run.
+     * New-user path: the portfolio snapshot history is empty until the 4-hour scheduler
+     * records the first entry.  In that case we fall back to the user's current live
+     * position value (sum of currentValue across all positions) as the normalization base.
+     * This ensures SPY/QQQ benchmark lines always render right after a brokerage is
+     * connected and prices are enriched — no need to wait for the next scheduler run.
      */
     @Transactional(readOnly = true)
     public PerformanceResponse getPerformance(UUID userId, int days) {
@@ -76,11 +87,15 @@ public class PortfolioService {
                 .map(s -> new PerformanceResponse.DataPoint(s.getSnapshotDate(), s.getTotalValue()))
                 .toList();
 
-        // Normalise benchmarks to the portfolio's Day-0 value.
-        // If the portfolio has no data yet, benchmarks are returned empty (graceful for new users).
-        BigDecimal portfolioStartValue = portfolio.isEmpty()
-                ? BigDecimal.ZERO
-                : portfolio.get(0).value();
+        // Normalization base: use the Day-0 snapshot value when available.
+        // New users have no snapshots yet → use the live positions total so benchmarks
+        // can still be normalised and rendered on the same Y-axis.
+        BigDecimal portfolioStartValue;
+        if (!portfolio.isEmpty()) {
+            portfolioStartValue = portfolio.get(0).value();
+        } else {
+            portfolioStartValue = positionRepository.sumCurrentValueByUserId(userId);
+        }
 
         List<PerformanceResponse.DataPoint> spy = benchmarkService.getNormalizedSeries(
                 "SPY", since, portfolioStartValue);
@@ -122,6 +137,40 @@ public class PortfolioService {
                 ))
                 .sorted(Comparator.comparing(AllocationItem::value).reversed())
                 .toList();
+    }
+
+    // ── Snapshot recording ────────────────────────────────────────────────────
+
+    /**
+     * Records (or updates) today's portfolio snapshot for a single user based on
+     * the current sum of position values.  Called from the manual sync endpoint so
+     * the performance chart has at least one data point immediately after the user
+     * connects their first brokerage — no need to wait for the 4-hour scheduler.
+     *
+     * <p>No-ops when the user has no priced positions yet (total value == 0).
+     */
+    @Transactional
+    public void recordSnapshotForUser(UUID userId) {
+        BigDecimal totalValue = positionRepository.sumCurrentValueByUserId(userId);
+        if (totalValue == null || totalValue.compareTo(BigDecimal.ZERO) == 0) {
+            log.debug("Skipping snapshot for user={} — no priced positions yet", userId);
+            return;
+        }
+
+        User user = userRepository.getReferenceById(userId);
+        LocalDate today = LocalDate.now();
+
+        PortfolioSnapshot snapshot = snapshotRepository
+                .findByUserIdAndSnapshotDate(userId, today)
+                .orElseGet(() -> PortfolioSnapshot.builder()
+                        .user(user)
+                        .snapshotDate(today)
+                        .createdAt(Instant.now())
+                        .build());
+
+        snapshot.setTotalValue(totalValue);
+        snapshotRepository.save(snapshot);
+        log.info("Snapshot recorded on manual sync: user={} date={} value={}", userId, today, totalValue);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

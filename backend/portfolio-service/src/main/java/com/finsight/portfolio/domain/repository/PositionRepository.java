@@ -43,4 +43,16 @@ public interface PositionRepository extends JpaRepository<Position, UUID> {
             GROUP BY p.account.plaidItem.user.id
             """)
     List<Object[]> sumCurrentValueGroupedByUserId();
+
+    /**
+     * Sums current portfolio value for a single user across all positions.
+     * Returns 0 when the user has no positions or none are priced yet.
+     * Used as a normalization base for benchmark series when no snapshot history exists.
+     */
+    @Query("""
+            SELECT COALESCE(SUM(COALESCE(p.currentValue, 0)), 0)
+            FROM Position p
+            WHERE p.account.plaidItem.user.id = :userId
+            """)
+    BigDecimal sumCurrentValueByUserId(@Param("userId") UUID userId);
 }
