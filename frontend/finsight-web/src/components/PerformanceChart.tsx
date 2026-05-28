@@ -83,22 +83,33 @@ export default function PerformanceChart({ hasHoldings }: Props) {
   const isPositive = gainAmt == null || gainAmt >= 0
 
   // ── Merge all three series into one recharts-compatible dataset ───────────
-  // Key: union of all dates, each row has optional spy/qqq values
+  // Use the UNION of all dates across portfolio + spy + qqq so that
+  // benchmark lines (which have 90 days of data) render even when the
+  // portfolio only has 1 historical snapshot (e.g. right after a brokerage
+  // is first connected, before the scheduler builds up daily history).
   const mergedData: ChartRow[] = (() => {
-    if (portfolio.length === 0) return []
+    const portfolioMap = new Map(portfolio.map((p) => [p.date, p.value]))
+    const spyMap       = new Map(spy.map((p) => [p.date, p.value]))
+    const qqqMap       = new Map(qqq.map((p) => [p.date, p.value]))
 
-    const spyMap = new Map(spy.map((p) => [p.date, p.value]))
-    const qqqMap = new Map(qqq.map((p) => [p.date, p.value]))
+    const allDates = Array.from(new Set([
+      ...portfolio.map((p) => p.date),
+      ...spy.map((p) => p.date),
+      ...qqq.map((p) => p.date),
+    ])).sort()
 
-    return portfolio.map((p) => ({
-      date:      p.date,
-      portfolio: p.value,
-      spy:       spyMap.get(p.date),
-      qqq:       qqqMap.get(p.date),
+    if (allDates.length === 0) return []
+
+    return allDates.map((date) => ({
+      date,
+      portfolio: portfolioMap.get(date),
+      spy:       spyMap.get(date),
+      qqq:       qqqMap.get(date),
     }))
   })()
 
-  const hasBenchmarks = spy.length > 0 || qqq.length > 0
+  const hasBenchmarks     = spy.length > 0 || qqq.length > 0
+  const portfolioIsSparse = portfolio.length < 2
 
   const chartHeight  = isMobile ? 190 : 220
   const yAxisWidth   = isMobile ? 62  : 76
@@ -199,7 +210,7 @@ export default function PerformanceChart({ hasHoldings }: Props) {
         }}>
           <p style={{ color: colors.textSecondary, fontSize: 13, margin: 0 }}>⏳ Not enough data yet</p>
           <p style={{ color: colors.textMuted, fontSize: 12, margin: 0, textAlign: 'center' }}>
-            Chart builds up over time — check back after the next sync.
+            Click <strong style={{ color: colors.brand }}>Sync Now</strong> on the Transactions page to load data immediately.
           </p>
         </div>
       ) : (
@@ -291,6 +302,18 @@ export default function PerformanceChart({ hasHoldings }: Props) {
             )}
           </AreaChart>
         </ResponsiveContainer>
+      )}
+
+      {/* Sparse portfolio notice — shown when benchmarks render but portfolio history is thin */}
+      {mergedData.length >= 2 && portfolioIsSparse && hasBenchmarks && (
+        <p style={{
+          margin:    '10px 0 0',
+          fontSize:  11,
+          color:     colors.textMuted,
+          textAlign: 'center',
+        }}>
+          ⏳ Portfolio history builds over time — benchmark lines shown for context
+        </p>
       )}
     </div>
   )

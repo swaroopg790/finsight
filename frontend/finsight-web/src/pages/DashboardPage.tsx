@@ -91,7 +91,7 @@ export default function DashboardPage() {
   const handleBrokerageConnected = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['accounts'] })
     queryClient.invalidateQueries({ queryKey: ['holdings'] })
-    // Full sync: accounts + holdings + transactions, then price refresh
+    // Full sync: accounts + holdings + transactions + snapshot + benchmarks
     api.post('/portfolio/sync').catch(() => {})
     api.post('/portfolio/refresh-prices').catch(() => {})
     setPricesSyncing(true)
@@ -101,12 +101,13 @@ export default function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ['allocation'] })
       queryClient.invalidateQueries({ queryKey: ['insights'] })
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['performance'] })
       setPricesSyncing(false)
     }, 12_000)
   }, [queryClient])
 
   const handleSyncPrices = useCallback(() => {
-    // Full sync + price refresh — also picks up any missing transactions
+    // Full sync + price refresh — picks up transactions, snapshot, and benchmarks
     api.post('/portfolio/sync').catch(() => {})
     api.post('/portfolio/refresh-prices').catch(() => {})
     setPricesSyncing(true)
@@ -116,6 +117,7 @@ export default function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ['allocation'] })
       queryClient.invalidateQueries({ queryKey: ['insights'] })
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['performance'] })
       setPricesSyncing(false)
     }, 12_000)
   }, [queryClient])

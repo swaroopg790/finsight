@@ -66,7 +66,12 @@ export default function TransactionsPage() {
     onMutate:   () => setSyncing(true),
     onSettled:  () => {
       setSyncing(false)
+      // Invalidate all data that the sync endpoint refreshes:
+      // transactions, portfolio snapshots (performance chart), and holdings
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['performance'] })
+      queryClient.invalidateQueries({ queryKey: ['holdings'] })
+      queryClient.invalidateQueries({ queryKey: ['allocation'] })
     },
   })
 
