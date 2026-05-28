@@ -4,6 +4,7 @@ import com.finsight.portfolio.api.dto.response.AccountResponse;
 import com.finsight.portfolio.api.dto.response.AllocationItem;
 import com.finsight.portfolio.api.dto.response.HoldingResponse;
 import com.finsight.portfolio.api.dto.response.PerformanceResponse;
+import com.finsight.portfolio.domain.service.PlaidService;
 import com.finsight.portfolio.domain.service.PortfolioService;
 import com.finsight.portfolio.infrastructure.market.PriceEnrichmentService;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class PortfolioController {
 
     private final PortfolioService        portfolioService;
     private final PriceEnrichmentService  priceEnrichmentService;
+    private final PlaidService            plaidService;
 
     @GetMapping("/holdings")
     public List<HoldingResponse> getHoldings(@AuthenticationPrincipal Jwt jwt) {
@@ -71,6 +73,24 @@ public class PortfolioController {
         return Map.of(
                 "status",  "accepted",
                 "message", "Price refresh queued — re-fetch holdings in ~10 seconds"
+        );
+    }
+
+    /**
+     * Forces an immediate full re-sync (accounts + holdings + transactions) for all
+     * brokerage connections belonging to the authenticated user.
+     *
+     * Useful when transactions are empty after connecting a brokerage with an older
+     * installation. Returns 202 Accepted — sync runs synchronously before responding.
+     */
+    @PostMapping("/sync")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public Map<String, String> syncNow(@AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        plaidService.syncAllItemsForUser(userId);
+        return Map.of(
+                "status",  "accepted",
+                "message", "Sync complete — refresh the page to see updated data"
         );
     }
 }

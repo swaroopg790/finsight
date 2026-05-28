@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useQuery }  from '@tanstack/react-query'
-import { Receipt, ChevronLeft, ChevronRight, ArrowDownCircle, ArrowUpCircle, Gift, HelpCircle } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Receipt, ChevronLeft, ChevronRight, ArrowDownCircle, ArrowUpCircle, Gift, HelpCircle, RefreshCw } from 'lucide-react'
 import api                    from '../lib/api'
 import { useBreakpoint }      from '../hooks/useBreakpoint'
 import { colors, radius, shadow } from '../lib/tokens'
@@ -56,8 +56,19 @@ function txTypeMeta(type: string): TxType {
 const PAGE_SIZE = 25
 
 export default function TransactionsPage() {
-  const [page, setPage] = useState(0)
-  const { isMobile }    = useBreakpoint()
+  const [page, setPage]     = useState(0)
+  const { isMobile }        = useBreakpoint()
+  const queryClient         = useQueryClient()
+  const [syncing, setSyncing] = useState(false)
+
+  const syncMutation = useMutation({
+    mutationFn: () => api.post('/portfolio/sync'),
+    onMutate:   () => setSyncing(true),
+    onSettled:  () => {
+      setSyncing(false)
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+    },
+  })
 
   const { data, isLoading, isError } = useQuery<PagedResponse>({
     queryKey: ['transactions', page],
@@ -80,23 +91,53 @@ export default function TransactionsPage() {
 
       {/* ── Page header ──────────────────────────────────────────────────── */}
       <div style={{ marginBottom: isMobile ? 18 : 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-          <div style={{
-            width:        32, height: 32, borderRadius: radius.sm,
-            background:   colors.brandBg, display: 'flex',
-            alignItems:   'center', justifyContent: 'center',
-          }}>
-            <Receipt size={16} color={colors.brand} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <div style={{
+                width:        32, height: 32, borderRadius: radius.sm,
+                background:   colors.brandBg, display: 'flex',
+                alignItems:   'center', justifyContent: 'center',
+              }}>
+                <Receipt size={16} color={colors.brand} />
+              </div>
+              <h1 style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, margin: 0, letterSpacing: '-0.5px', color: colors.text }}>
+                Transaction History
+              </h1>
+            </div>
+            <p style={{ color: colors.textMuted, margin: 0, fontSize: 13 }}>
+              {totalElements > 0
+                ? `${totalElements} transactions across all connected accounts`
+                : 'Investment transactions from your connected accounts'}
+            </p>
           </div>
-          <h1 style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, margin: 0, letterSpacing: '-0.5px', color: colors.text }}>
-            Transaction History
-          </h1>
+
+          {/* Sync Now button */}
+          <button
+            onClick={() => syncMutation.mutate()}
+            disabled={syncing || isLoading}
+            style={{
+              display:      'flex',
+              alignItems:   'center',
+              gap:          6,
+              padding:      '8px 16px',
+              background:   colors.brand,
+              color:        '#fff',
+              border:       'none',
+              borderRadius: radius.sm,
+              fontSize:     13,
+              fontWeight:   600,
+              cursor:       syncing ? 'wait' : 'pointer',
+              opacity:      syncing ? 0.7 : 1,
+              transition:   'opacity 0.15s',
+              minHeight:    38,
+              flexShrink:   0,
+            }}
+          >
+            <RefreshCw size={14} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
+            {syncing ? 'Syncing…' : 'Sync Now'}
+          </button>
         </div>
-        <p style={{ color: colors.textMuted, margin: 0, fontSize: 13 }}>
-          {totalElements > 0
-            ? `${totalElements} transactions across all connected accounts`
-            : 'Investment transactions from your connected accounts'}
-        </p>
       </div>
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
@@ -315,11 +356,12 @@ function EmptyState() {
       background:   colors.surface,
     }}>
       <Receipt size={32} color={colors.textMuted} style={{ margin: '0 auto 12px' }} />
-      <p style={{ color: colors.textSecondary, fontSize: 14, margin: 0 }}>
+      <p style={{ color: colors.textSecondary, fontSize: 14, margin: 0, fontWeight: 500 }}>
         No transactions found yet.
       </p>
-      <p style={{ color: colors.textMuted, fontSize: 12, marginTop: 6 }}>
-        Transactions are synced automatically every 4 hours once you connect a brokerage.
+      <p style={{ color: colors.textMuted, fontSize: 12, marginTop: 8, maxWidth: 380, margin: '8px auto 0' }}>
+        If you just connected a brokerage, click <strong style={{ color: colors.brand }}>Sync Now</strong> above to load your transaction history immediately.
+        Transactions are also synced automatically every 4 hours.
       </p>
     </div>
   )

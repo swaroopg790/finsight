@@ -45,6 +45,7 @@ public class PlaidService {
     private final PositionRepository     positionRepository;
     private final UserRepository         userRepository;
     private final PriceEnrichmentService priceEnrichmentService;
+    private final TransactionService     transactionService;
 
     // ── Public API ───────────────────────────────────────────────────────────
 
@@ -107,7 +108,27 @@ public class PlaidService {
     }
 
     /**
-     * Syncs a single PlaidItem — decrypts token, refreshes accounts + holdings.
+     * Forces a full re-sync of all active PlaidItems for a given user.
+     * Called from the manual /portfolio/sync endpoint — useful after initial
+     * connection to populate transactions without waiting for the scheduler.
+     */
+    public void syncAllItemsForUser(UUID userId) {
+        List<PlaidItem> items = plaidItemRepository
+                .findByUserIdAndStatus(userId, PlaidItem.PlaidItemStatus.ACTIVE);
+
+        log.info("Manual sync triggered for user={} ({} active items)", userId, items.size());
+        for (PlaidItem item : items) {
+            try {
+                syncItem(item);
+            } catch (Exception e) {
+                log.warn("Manual sync failed for item={}: {}", item.getId(), e.getMessage());
+            }
+        }
+        log.info("Manual sync complete for user={}", userId);
+    }
+
+    /**
+     * Syncs a single PlaidItem — decrypts token, refreshes accounts + holdings + transactions.
      * Called from the scheduler for periodic background updates.
      */
     @Transactional
@@ -155,6 +176,15 @@ public class PlaidService {
             // investment holdings — this is expected for checking/savings-only items.
             log.warn("Holdings sync skipped for item={} (account may not support investments): {}",
                     item.getId(), e.getMessage());
+        }
+
+        // ── Investment transaction sync ────────────────────────────────────────
+        // Must run AFTER syncAccounts so account rows exist for FK lookups.
+        // Idempotent: skips already-stored plaid_transaction_id values.
+        try {
+            transactionService.syncTransactions(item, accessToken, plaidGateway);
+        } catch (Exception e) {
+            log.warn("Transaction sync skipped for item={}: {}", item.getId(), e.getMessage());
         }
 
         item.setLastSyncedAt(Instant.now());
