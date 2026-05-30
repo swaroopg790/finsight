@@ -47,6 +47,33 @@ public class Transaction {
     @Column(name = "transaction_date", nullable = false)
     private LocalDate transactionDate;
 
+    /**
+     * Transaction source: INVESTMENT (from Plaid Investments API) or BANK (from Plaid Transactions API).
+     * Defaults to INVESTMENT for backward compatibility with existing rows.
+     */
+    @Column(name = "source", nullable = false, length = 20)
+    @Builder.Default
+    private String source = "INVESTMENT";
+
+    /**
+     * Spending category for BANK transactions (e.g., GROCERIES, DINING, SUBSCRIPTIONS).
+     * Null for INVESTMENT transactions.
+     */
+    @Column(name = "category", length = 50)
+    private String category;
+
+    /**
+     * Merchant or payee name for BANK transactions.
+     * For investment transactions this is the same as securityName.
+     */
+    @Column(name = "merchant_name")
+    private String merchantName;
+
+    /** True if this transaction has been detected as a recurring charge (subscription, utility bill). */
+    @Column(name = "is_recurring", nullable = false)
+    @Builder.Default
+    private boolean recurring = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

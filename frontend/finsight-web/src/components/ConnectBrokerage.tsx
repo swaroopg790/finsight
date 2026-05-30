@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import type { PlaidLinkOnSuccess } from 'react-plaid-link'
-import { Plus, Link2 } from 'lucide-react'
-import api from '../lib/api'
+import { Plus, Link2, FlaskConical } from 'lucide-react'
+import api               from '../lib/api'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 import { colors, radius } from '../lib/tokens'
 
@@ -13,13 +13,19 @@ interface Props {
 /**
  * "Connect Brokerage" button powered by Plaid Link.
  *
- * Flow:
- *   1. Fetches a link_token from the backend  (GET /api/v1/plaid/link-token)
- *   2. Opens the Plaid Link widget with that token
- *   3. On success, POSTs the public_token + institution info to /api/v1/plaid/exchange-token
- *   4. Calls onSuccess() so the parent can invalidate its data queries
+ * Two modes:
+ *  - REAL mode  (PLAID_MODE=sandbox): opens the real Plaid Link widget.
+ *                                     Sandbox creds: user_good / pass_good
+ *  - MOCK mode  (PLAID_MODE=mock):    backend returns a link-mock-* token;
+ *                                     skips Plaid Link entirely and POSTs a
+ *                                     synthetic public token straight to
+ *                                     exchange-token. No Plaid credentials needed.
  *
- * Sandbox test credentials: username = user_good, password = pass_good
+ * Flow:
+ *   1. GET /plaid/link-token  →  { linkToken }
+ *   2a. Mock token → direct POST /plaid/exchange-token (no widget)
+ *   2b. Real token → open Plaid Link widget → on success POST /plaid/exchange-token
+ *   3. onSuccess() triggers parent query invalidation
  */
 export default function ConnectBrokerage({ onSuccess }: Props) {
   const { isMobile } = useBreakpoint()
@@ -28,17 +34,36 @@ export default function ConnectBrokerage({ onSuccess }: Props) {
   const [exchanging, setExchanging] = useState(false)
   const [error,      setError]      = useState<string | null>(null)
 
+  // A mock token is issued by the backend when PLAID_MODE=mock (no real Plaid creds needed)
+  const isMockToken = linkToken?.startsWith('link-mock-') ?? false
+
   // Fetch link token once on mount
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     api.get('/plaid/link-token')
       .then((res) => { if (!cancelled) setLinkToken(res.data.linkToken) })
-      .catch(() => { if (!cancelled) setError('Could not initialise Plaid — check your API keys.') })
+      .catch(() => { if (!cancelled) setError('Could not initialise Plaid — check backend logs.') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [])
 
+  // ── Mock path: skip Plaid Link, exchange a synthetic token directly ──────────
+  const connectMock = useCallback(() => {
+    setExchanging(true)
+    setError(null)
+    api
+      .post('/plaid/exchange-token', {
+        publicToken:     'mock-public-token-' + Date.now(),
+        institutionId:   'mock-ins-0',
+        institutionName: 'Mock Brokerage (Dev)',
+      })
+      .then(() => onSuccess())
+      .catch(() => setError('Mock connect failed — check backend logs.'))
+      .finally(() => setExchanging(false))
+  }, [onSuccess])
+
+  // ── Real Plaid path ──────────────────────────────────────────────────────────
   const onPlaidSuccess: PlaidLinkOnSuccess = useCallback(
     (publicToken, metadata) => {
       setExchanging(true)
@@ -56,20 +81,28 @@ export default function ConnectBrokerage({ onSuccess }: Props) {
     [onSuccess],
   )
 
+  // usePlaidLink is always called (Rules of Hooks).
+  // In mock mode we pass null so the Plaid SDK never tries to load/validate the token.
   const { open, ready } = usePlaidLink({
-    token:    linkToken,
+    token:     isMockToken ? null : linkToken,
     onSuccess: onPlaidSuccess,
-    onExit:   (err) => { if (err) setError('Plaid Link exited with an error.') },
+    onExit:    (err) => { if (err) setError('Plaid Link exited with an error.') },
   })
 
-  const isDisabled = loading || !ready || exchanging
+  // ── Derived state ────────────────────────────────────────────────────────────
+  const isDisabled = loading || exchanging || (!isMockToken && !ready)
 
   const label = exchanging ? 'Linking…' : loading ? 'Preparing…' : 'Connect Brokerage'
+
+  const handleClick = () => {
+    if (isMockToken) connectMock()
+    else             open()
+  }
 
   return (
     <div style={{ width: isMobile ? '100%' : 'auto' }}>
       <button
-        onClick={() => open()}
+        onClick={handleClick}
         disabled={isDisabled}
         style={{
           display:        'inline-flex',
@@ -93,9 +126,24 @@ export default function ConnectBrokerage({ onSuccess }: Props) {
         onMouseEnter={(e) => { if (!isDisabled) e.currentTarget.style.background = colors.brandDark }}
         onMouseLeave={(e) => { if (!isDisabled) e.currentTarget.style.background = colors.brand }}
       >
-        {exchanging ? <Link2 size={14} /> : <Plus size={14} />}
+        {exchanging
+          ? <Link2      size={14} />
+          : isMockToken
+          ? <FlaskConical size={14} />
+          : <Plus       size={14} />}
         {label}
       </button>
+
+      {/* Dev-mode hint */}
+      {isMockToken && !error && !exchanging && (
+        <p style={{
+          margin: '6px 0 0', fontSize: 11,
+          color: colors.textMuted, display: 'flex', alignItems: 'center', gap: 4,
+        }}>
+          <FlaskConical size={11} color={colors.brand} />
+          Dev mode — loads synthetic portfolio data instantly
+        </p>
+      )}
 
       {error && (
         <p style={{ color: colors.dangerText, fontSize: 13, marginTop: 8, marginBottom: 0 }}>

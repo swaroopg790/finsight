@@ -37,6 +37,15 @@ public interface PlaidGateway {
                                                        java.time.LocalDate startDate,
                                                        java.time.LocalDate endDate);
 
+    /**
+     * Fetches bank/spending transactions (checking, savings) for an item.
+     * Requires the item to have been connected with the TRANSACTIONS Plaid product.
+     * Returns at most 500 transactions per call.
+     */
+    List<BankTransactionData> fetchBankTransactions(String accessToken,
+                                                     java.time.LocalDate startDate,
+                                                     java.time.LocalDate endDate);
+
     // ── Value objects ────────────────────────────────────────────────────────
 
     record ExchangeResult(String accessToken, String itemId) {}
@@ -58,6 +67,23 @@ public interface PlaidGateway {
             BigDecimal quantity,
             BigDecimal costBasis,       // total cost basis (not per-share)
             BigDecimal currentPrice
+    ) {}
+
+    /**
+     * A single bank/spending transaction from Plaid's /transactions/get endpoint.
+     *
+     * <p>Amount convention (normalised — opposite of Plaid's raw sign):<br>
+     * &nbsp;&bull; Negative = debit / expense (money leaving the account)<br>
+     * &nbsp;&bull; Positive = credit / income (money entering the account)
+     */
+    record BankTransactionData(
+            String              plaidAccountId,
+            String              plaidTransactionId,
+            String              merchantName,       // cleaned merchant/payee name
+            String              name,               // raw transaction name (fallback)
+            java.math.BigDecimal amount,             // normalised: negative=expense, positive=income
+            java.time.LocalDate date,
+            java.util.List<String> plaidCategories  // e.g. ["Food and Drink", "Restaurants"]
     ) {}
 
     record TransactionData(

@@ -38,7 +38,7 @@ public class SandboxPlaidGateway implements PlaidGateway {
             LinkTokenCreateRequest request = new LinkTokenCreateRequest()
                     .user(new LinkTokenCreateRequestUser().clientUserId(userId))
                     .clientName("FinSight")
-                    .products(List.of(Products.INVESTMENTS))
+                    .products(List.of(Products.INVESTMENTS, Products.TRANSACTIONS))
                     .countryCodes(List.of(CountryCode.US))
                     .language("en");
 
@@ -177,6 +177,57 @@ public class SandboxPlaidGateway implements PlaidGateway {
 
         } catch (IOException e) {
             throw new IllegalStateException("Plaid investmentsTransactionsGet failed", e);
+        }
+    }
+
+    @Override
+    public List<BankTransactionData> fetchBankTransactions(String accessToken,
+                                                            LocalDate startDate,
+                                                            LocalDate endDate) {
+        log.debug("Fetching Plaid bank transactions {} → {}", startDate, endDate);
+        try {
+            com.plaid.client.model.TransactionsGetRequest request =
+                    new com.plaid.client.model.TransactionsGetRequest()
+                            .accessToken(accessToken)
+                            .startDate(startDate)
+                            .endDate(endDate);
+
+            Response<com.plaid.client.model.TransactionsGetResponse> response =
+                    plaidApi.transactionsGet(request).execute();
+
+            com.plaid.client.model.TransactionsGetResponse body =
+                    requireBody(response, "transactionsGet");
+
+            return body.getTransactions().stream()
+                    .map(t -> {
+                        // Plaid sign: positive = money out (debit); negative = money in (credit)
+                        // We normalise: negative = expense, positive = income
+                        BigDecimal amount = t.getAmount() != null
+                                ? BigDecimal.valueOf(t.getAmount()).negate()
+                                : BigDecimal.ZERO;
+
+                        String merchant = t.getMerchantName() != null
+                                ? t.getMerchantName()
+                                : t.getName();
+
+                        List<String> cats = t.getCategory() != null
+                                ? t.getCategory()
+                                : List.of();
+
+                        return new BankTransactionData(
+                                t.getAccountId(),
+                                t.getTransactionId(),
+                                merchant,
+                                t.getName(),
+                                amount,
+                                t.getDate(),
+                                cats
+                        );
+                    })
+                    .toList();
+
+        } catch (IOException e) {
+            throw new IllegalStateException("Plaid transactionsGet failed", e);
         }
     }
 

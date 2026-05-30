@@ -2,12 +2,16 @@ import {
   LayoutDashboard,
   Receipt,
   Bell,
+  Calculator,
+  Wallet,
   MessageCircle,
   LogOut,
   UserCircle,
   Sparkles,
   Sun,
   Moon,
+  Target,
+  TrendingUp,
 } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { ChatProvider, useChatContext } from '../contexts/ChatContext'
@@ -21,9 +25,13 @@ import {
 
 // ── Nav items definition ──────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { label: 'Dashboard',    icon: LayoutDashboard, path: '/'             },
-  { label: 'Transactions', icon: Receipt,          path: '/transactions' },
-  { label: 'Alerts',       icon: Bell,             path: '/alerts'      },
+  { label: 'Dashboard',          icon: LayoutDashboard, path: '/'             },
+  { label: 'Net Worth',          icon: TrendingUp,      path: '/networth'     },
+  { label: 'Transactions',       icon: Receipt,         path: '/transactions' },
+  { label: 'Budget & Cash Flow', icon: Wallet,          path: '/budget'       },
+  { label: 'Goals',              icon: Target,          path: '/goals'        },
+  { label: 'Tax Intelligence',   icon: Calculator,      path: '/tax'          },
+  { label: 'Alerts',             icon: Bell,            path: '/alerts'       },
 ]
 
 // ── Inner shell (has access to ChatContext + ThemeContext) ────────────────────
@@ -321,9 +329,10 @@ function MobileBottomNav({ onChat, activePath }: { onChat: () => void; activePat
   const navigate = useNavigate()
 
   const items = [
-    { label: 'Dashboard',    icon: LayoutDashboard, path: '/',             action: () => navigate('/') },
-    { label: 'Transactions', icon: Receipt,          path: '/transactions', action: () => navigate('/transactions') },
-    { label: 'Copilot',      icon: MessageCircle,   path: null,            action: onChat },
+    { label: 'Dashboard', icon: LayoutDashboard, path: '/',          action: () => navigate('/') },
+    { label: 'Net Worth', icon: TrendingUp,      path: '/networth',  action: () => navigate('/networth') },
+    { label: 'Budget',    icon: Wallet,          path: '/budget',    action: () => navigate('/budget') },
+    { label: 'Copilot',   icon: MessageCircle,   path: null,         action: onChat },
   ]
 
   return (

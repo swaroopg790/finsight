@@ -161,26 +161,42 @@ public class PolygonClient {
 
     /**
      * Generates deterministic mock daily bars for local dev (no Polygon key needed).
-     * Simulates realistic SPY (~520) / QQQ (~445) price trajectories with slight upward
-     * drift and Gaussian noise, seeded by ticker name for reproducibility.
+     *
+     * <p><strong>Epoch-anchored walk:</strong> the RNG always starts from a fixed epoch
+     * (2020-01-01) regardless of the requested {@code from} date. This guarantees that
+     * any given calendar date always produces the exact same price, whether it was requested
+     * as part of a 30-day or 365-day range. Without this anchor, re-syncing with a longer
+     * range would generate different prices for already-stored dates and create visible
+     * discontinuities on the chart.
      */
     private List<DailyBar> generateMockBars(String ticker, LocalDate from, LocalDate to) {
-        // Base prices approximate real market levels; start ~15% lower to show visible growth
-        double basePrice = "SPY".equalsIgnoreCase(ticker) ? 520.0 : 445.0;
+        // Epoch: fixed reference point — RNG walk always starts here
+        final LocalDate EPOCH = LocalDate.of(2020, 1, 1);
+
+        // Base prices approximate real 2020 market levels; start ~15% below for visible growth
+        double basePrice = "SPY".equalsIgnoreCase(ticker) ? 320.0 : 215.0;
         double price     = basePrice * 0.85;
 
-        long totalDays = ChronoUnit.DAYS.between(from, to);
-        Random rng     = new Random(ticker.hashCode()); // stable per ticker — same data every run
-        List<DailyBar> bars = new ArrayList<>();
+        // Seed by ticker so SPY and QQQ have independent (but reproducible) trajectories
+        Random rng = new Random(ticker.hashCode() & 0xFFFFFFFFL);
 
+        // ── Warm-up pass: walk from EPOCH to `from` (discard bars, just advance the price) ──
+        for (LocalDate d = EPOCH; d.isBefore(from); d = d.plusDays(1)) {
+            if (d.getDayOfWeek() != DayOfWeek.SATURDAY
+             && d.getDayOfWeek() != DayOfWeek.SUNDAY) {
+                price *= (1.0 + (rng.nextGaussian() * 0.01) + 0.0003);
+            }
+        }
+
+        // ── Generation pass: emit bars from `from` to `to` ──────────────────────────────────
+        List<DailyBar> bars = new ArrayList<>();
+        long totalDays = ChronoUnit.DAYS.between(from, to);
         for (long i = 0; i <= totalDays; i++) {
             LocalDate date = from.plusDays(i);
-            // Skip weekends — markets are closed
             if (date.getDayOfWeek() == DayOfWeek.SATURDAY
              || date.getDayOfWeek() == DayOfWeek.SUNDAY) {
                 continue;
             }
-            // ~0.03% daily drift + ~1% Gaussian noise (realistic equity volatility)
             price *= (1.0 + (rng.nextGaussian() * 0.01) + 0.0003);
             bars.add(new DailyBar(date,
                     BigDecimal.valueOf(price).setScale(2, RoundingMode.HALF_UP)));

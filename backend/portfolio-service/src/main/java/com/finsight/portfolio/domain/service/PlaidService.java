@@ -187,6 +187,14 @@ public class PlaidService {
             log.warn("Transaction sync skipped for item={}: {}", item.getId(), e.getMessage());
         }
 
+        // ── Bank transaction sync (checking / savings) ─────────────────────────
+        // Requires TRANSACTIONS Plaid product. Gracefully skipped if not available.
+        try {
+            transactionService.syncBankTransactions(item, accessToken, plaidGateway);
+        } catch (Exception e) {
+            log.warn("Bank transaction sync skipped for item={}: {}", item.getId(), e.getMessage());
+        }
+
         item.setLastSyncedAt(Instant.now());
         plaidItemRepository.save(item);
         log.info("Sync complete for item={}", item.getId());

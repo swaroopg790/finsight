@@ -5,14 +5,17 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 public record TransactionResponse(
-        UUID      id,
-        String    ticker,
-        String    securityName,
-        String    transactionType,   // BUY, SELL, DIVIDEND, FEE, TRANSFER, OTHER
+        UUID       id,
+        String     ticker,
+        String     securityName,
+        String     transactionType,   // BUY, SELL, DIVIDEND, DEBIT, CREDIT, etc.
         BigDecimal quantity,
         BigDecimal price,
-        BigDecimal amount,           // negative = buy (cash out), positive = sell/dividend (cash in)
-        LocalDate transactionDate,
-        String    accountName,
-        String    institutionName
+        BigDecimal amount,            // negative = expense/buy (cash out), positive = income/sell
+        LocalDate  transactionDate,
+        String     accountName,
+        String     institutionName,
+        String     source,            // "INVESTMENT" or "BANK"
+        String     category,          // spending category for BANK transactions (nullable)
+        String     merchantName       // merchant/payee name for BANK transactions (nullable)
 ) {}

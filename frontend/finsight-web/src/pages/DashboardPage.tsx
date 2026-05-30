@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Wallet, TrendingUp, TrendingDown, RefreshCw, Unlink, ChevronUp, ChevronDown,
+  Target, ChevronRight,
 } from 'lucide-react'
 import AllocationChart   from '../components/AllocationChart'
 import ChatPanel         from '../components/ChatPanel'
@@ -13,6 +15,27 @@ import { useCountUp }    from '../hooks/useCountUp'
 import api               from '../lib/api'
 import { colors, radius, shadow } from '../lib/tokens'
 import { liveRefetchInterval } from '../lib/marketHours'
+
+// ── Net worth mini-card type ───────────────────────────────────────────────────
+interface DashNetWorth {
+  netWorth:         number
+  totalAssets:      number
+  totalLiabilities: number
+  changeToday:      number
+  changeTodayPct:   number
+}
+
+// ── Goal types (dashboard strip only) ─────────────────────────────────────────
+interface DashGoal {
+  id:               string
+  name:             string
+  emoji:            string
+  progressFraction: number
+  yearsLeft:        number
+  targetAmount:     number
+  currentValue:     number
+  projection: { successProbability: number } | null
+}
 
 interface Holding {
   positionId:            string
@@ -44,8 +67,15 @@ type SortDir = 'asc' | 'desc'
 const fmtUsd = (v: number, decimals = 2) =>
   '$' + v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 
+function goalProbColor(p: number) {
+  if (p >= 0.75) return '#16a34a'
+  if (p >= 0.50) return '#d97706'
+  return '#dc2626'
+}
+
 export default function DashboardPage() {
-  const queryClient = useQueryClient()
+  const navigate     = useNavigate()
+  const queryClient  = useQueryClient()
   const { isMobile, isTablet } = useBreakpoint()
 
   const [pricesSyncing,   setPricesSyncing]   = useState(false)
@@ -64,6 +94,16 @@ export default function DashboardPage() {
   const { data: accounts = [], isLoading: accountsLoading } = useQuery<Account[]>({
     queryKey: ['accounts'],
     queryFn:  () => api.get('/portfolio/accounts').then((r) => r.data),
+  })
+
+  const { data: dashGoals = [] } = useQuery<DashGoal[]>({
+    queryKey: ['goals'],
+    queryFn:  () => api.get('/goals').then((r) => r.data),
+  })
+
+  const { data: dashNetWorth } = useQuery<DashNetWorth>({
+    queryKey: ['networth-summary'],
+    queryFn:  () => api.get('/networth/summary').then((r) => r.data),
   })
 
   const disconnectMutation = useMutation({
@@ -325,6 +365,127 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* ── Net Worth mini-card ─────────────────────────────────────────────── */}
+      {dashNetWorth && (
+        <div
+          onClick={() => navigate('/networth')}
+          style={{
+            background:   'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+            border:       `1px solid #334155`,
+            borderRadius: radius.lg,
+            padding:      '14px 20px',
+            marginBottom: 16,
+            boxShadow:    shadow.sm,
+            cursor:       'pointer',
+            display:      'flex',
+            alignItems:   'center',
+            justifyContent: 'space-between',
+            gap:          12,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
+              💰 Net Worth
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: dashNetWorth.netWorth >= 0 ? '#a5b4fc' : '#fca5a5', letterSpacing: '-0.5px' }}>
+              {dashNetWorth.netWorth < 0 ? '-' : ''}
+              {Math.abs(dashNetWorth.netWorth) >= 1_000_000
+                ? `$${(Math.abs(dashNetWorth.netWorth) / 1_000_000).toFixed(2)}M`
+                : Math.abs(dashNetWorth.netWorth) >= 1_000
+                  ? `$${(Math.abs(dashNetWorth.netWorth) / 1_000).toFixed(1)}K`
+                  : `$${Math.abs(dashNetWorth.netWorth).toLocaleString()}`}
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 2 }}>Today</div>
+            <div style={{
+              fontSize: 14, fontWeight: 700,
+              color: dashNetWorth.changeToday >= 0 ? '#86efac' : '#fca5a5',
+            }}>
+              {dashNetWorth.changeToday >= 0 ? '+' : ''}
+              {dashNetWorth.changeToday >= 1000 || dashNetWorth.changeToday <= -1000
+                ? `$${(dashNetWorth.changeToday / 1000).toFixed(1)}K`
+                : `$${dashNetWorth.changeToday.toFixed(0)}`}
+            </div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>
+              {dashNetWorth.totalAssets >= 1_000_000
+                ? `$${(dashNetWorth.totalAssets / 1_000_000).toFixed(1)}M`
+                : `$${(dashNetWorth.totalAssets / 1_000).toFixed(0)}K`} assets ·{' '}
+              {dashNetWorth.totalLiabilities >= 1_000_000
+                ? `$${(dashNetWorth.totalLiabilities / 1_000_000).toFixed(1)}M`
+                : `$${(dashNetWorth.totalLiabilities / 1_000).toFixed(0)}K`} liabilities
+            </div>
+          </div>
+          <ChevronRight size={16} color="#475569" />
+        </div>
+      )}
+
+      {/* ── Goal Progress Strip ─────────────────────────────────────────────── */}
+      {dashGoals.length > 0 && (
+        <div style={{
+          background:   colors.surface,
+          border:       `1px solid ${colors.border}`,
+          borderRadius: radius.lg,
+          padding:      '16px 20px',
+          marginBottom: 16,
+          boxShadow:    shadow.sm,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 15, color: colors.text }}>
+              <Target size={16} color="#4f46e5" />
+              Goal Progress
+            </div>
+            <button
+              onClick={() => navigate('/goals')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: '#4f46e5', fontSize: 12, fontWeight: 600,
+              }}
+            >
+              View All <ChevronRight size={14} />
+            </button>
+          </div>
+          <div style={{ display: 'grid', gap: 12 }}>
+            {dashGoals.slice(0, 3).map(g => {
+              const prob  = g.projection?.successProbability ?? 0
+              const progW = Math.round(g.progressFraction * 100)
+              const shortTarget = g.targetAmount >= 1_000_000
+                ? `$${(g.targetAmount / 1_000_000).toFixed(1)}M`
+                : g.targetAmount >= 1_000
+                  ? `$${(g.targetAmount / 1_000).toFixed(0)}k`
+                  : `$${g.targetAmount}`
+              return (
+                <div key={g.id}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
+                    <span style={{ color: colors.text, fontWeight: 600 }}>
+                      {g.emoji} {g.name}
+                    </span>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                      <span style={{ color: colors.textMuted }}>{g.yearsLeft}yr left</span>
+                      <span style={{ fontWeight: 700, color: goalProbColor(prob) }}>
+                        {(prob * 100).toFixed(0)}% odds
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ height: 6, background: colors.pageBg, borderRadius: radius.full, overflow: 'hidden', border: `1px solid ${colors.border}` }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${progW}%`,
+                      background: progW >= 100 ? '#16a34a' : '#4f46e5',
+                      borderRadius: radius.full,
+                    }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 3 }}>
+                    ${g.currentValue.toLocaleString()} of {shortTarget} · {progW}%
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Performance chart (full width) ─────────────────────────────────── */}
       <PerformanceChart hasHoldings={holdings.length > 0} />
