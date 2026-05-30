@@ -12,6 +12,7 @@ import {
   Moon,
   Target,
   TrendingUp,
+  Newspaper,
 } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { ChatProvider, useChatContext } from '../contexts/ChatContext'
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { label: 'Transactions',       icon: Receipt,         path: '/transactions' },
   { label: 'Budget & Cash Flow', icon: Wallet,          path: '/budget'       },
   { label: 'Goals',              icon: Target,          path: '/goals'        },
+  { label: 'Portfolio News',     icon: Newspaper,       path: '/news'         },
   { label: 'Tax Intelligence',   icon: Calculator,      path: '/tax'          },
   { label: 'Alerts',             icon: Bell,            path: '/alerts'       },
 ]
@@ -329,10 +331,10 @@ function MobileBottomNav({ onChat, activePath }: { onChat: () => void; activePat
   const navigate = useNavigate()
 
   const items = [
-    { label: 'Dashboard', icon: LayoutDashboard, path: '/',          action: () => navigate('/') },
-    { label: 'Net Worth', icon: TrendingUp,      path: '/networth',  action: () => navigate('/networth') },
-    { label: 'Budget',    icon: Wallet,          path: '/budget',    action: () => navigate('/budget') },
-    { label: 'Copilot',   icon: MessageCircle,   path: null,         action: onChat },
+    { label: 'Dashboard', icon: LayoutDashboard, path: '/',       action: () => navigate('/') },
+    { label: 'Net Worth', icon: TrendingUp,      path: '/networth', action: () => navigate('/networth') },
+    { label: 'News',      icon: Newspaper,       path: '/news',   action: () => navigate('/news') },
+    { label: 'Copilot',   icon: MessageCircle,   path: null,      action: onChat },
   ]
 
   return (

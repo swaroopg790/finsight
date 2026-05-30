@@ -10,6 +10,7 @@ import TaxPage         from './pages/TaxPage'
 import BudgetPage      from './pages/BudgetPage'
 import GoalPage        from './pages/GoalPage'
 import NetWorthPage    from './pages/NetWorthPage'
+import NewsPage        from './pages/NewsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/budget"       element={<PrivateShell><BudgetPage /></PrivateShell>} />
           <Route path="/goals"      element={<PrivateShell><GoalPage /></PrivateShell>} />
           <Route path="/networth"   element={<PrivateShell><NetWorthPage /></PrivateShell>} />
+          <Route path="/news"       element={<PrivateShell><NewsPage /></PrivateShell>} />
           <Route path="*"             element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

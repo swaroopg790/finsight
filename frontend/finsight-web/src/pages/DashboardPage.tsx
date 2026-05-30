@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Wallet, TrendingUp, TrendingDown, RefreshCw, Unlink, ChevronUp, ChevronDown,
-  Target, ChevronRight,
+  Target, ChevronRight, Newspaper,
 } from 'lucide-react'
 import AllocationChart   from '../components/AllocationChart'
 import ChatPanel         from '../components/ChatPanel'
@@ -104,6 +104,19 @@ export default function DashboardPage() {
   const { data: dashNetWorth } = useQuery<DashNetWorth>({
     queryKey: ['networth-summary'],
     queryFn:  () => api.get('/networth/summary').then((r) => r.data),
+  })
+
+  // News teaser — top 3 articles for "today's headlines" strip
+  const { data: newsData } = useQuery<{
+    articles: Array<{
+      id: string; title: string; tickers: string[];
+      relevantTickers: string[]; sentiment: string; relativeTime: string; publisher: string
+    }>
+    aiSummary: string
+  }>({
+    queryKey: ['news-feed'],
+    queryFn:  () => api.get('/news/feed').then((r) => r.data),
+    staleTime: 10 * 60 * 1000,
   })
 
   const disconnectMutation = useMutation({
@@ -479,6 +492,100 @@ export default function DashboardPage() {
                   </div>
                   <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 3 }}>
                     ${g.currentValue.toLocaleString()} of {shortTarget} · {progW}%
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Portfolio News Teaser ───────────────────────────────────────────── */}
+      {newsData && newsData.articles.length > 0 && (
+        <div style={{
+          background:   colors.surface,
+          border:       `1px solid ${colors.border}`,
+          borderRadius: radius.lg,
+          padding:      '16px 20px',
+          marginBottom: 16,
+          boxShadow:    shadow.sm,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 15, color: colors.text }}>
+              <Newspaper size={16} color={colors.brand} />
+              Today's Headlines
+            </div>
+            <button
+              onClick={() => navigate('/news')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: colors.brand, fontSize: 12, fontWeight: 600,
+              }}
+            >
+              All news <ChevronRight size={14} />
+            </button>
+          </div>
+
+          {/* AI summary teaser */}
+          {newsData.aiSummary && (
+            <div style={{
+              padding:      '10px 14px',
+              borderRadius: radius.sm,
+              background:   `${colors.brand}10`,
+              border:       `1px solid ${colors.brand}25`,
+              marginBottom: 10,
+            }}>
+              <p style={{ color: colors.text, fontSize: 12, margin: 0, lineHeight: 1.55, fontStyle: 'italic' }}>
+                "{newsData.aiSummary.length > 180
+                  ? newsData.aiSummary.slice(0, 177) + '…'
+                  : newsData.aiSummary}"
+              </p>
+            </div>
+          )}
+
+          {/* Top 3 articles */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {newsData.articles.slice(0, 3).map(a => {
+              const tickers = (a.relevantTickers.length > 0 ? a.relevantTickers : a.tickers).slice(0, 3)
+              const sentColor = a.sentiment === 'BULLISH' ? '#10b981'
+                              : a.sentiment === 'BEARISH' ? '#ef4444' : '#94a3b8'
+              return (
+                <div key={a.id} style={{
+                  display:     'flex',
+                  alignItems:  'flex-start',
+                  gap:         10,
+                  padding:     '8px 10px',
+                  borderRadius: radius.sm,
+                  background:  colors.pageBg,
+                  border:      `1px solid ${colors.border}`,
+                }}>
+                  <div style={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: sentColor,
+                    flexShrink: 0,
+                    marginTop: 5,
+                  }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{
+                      color: colors.text, fontSize: 12, fontWeight: 500,
+                      margin: '0 0 3px',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {a.title}
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {tickers.map(t => (
+                        <span key={t} style={{
+                          color: colors.brand, fontSize: 10, fontWeight: 700,
+                          padding: '1px 5px', borderRadius: radius.full,
+                          background: `${colors.brand}15`,
+                        }}>{t}</span>
+                      ))}
+                      <span style={{ color: colors.textMuted, fontSize: 10, marginLeft: 'auto' }}>
+                        {a.relativeTime}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )
