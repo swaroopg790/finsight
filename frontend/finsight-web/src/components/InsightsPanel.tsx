@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Sparkles, AlertTriangle, Lightbulb, RotateCw } from 'lucide-react'
 import api from '../lib/api'
-import { colors, radius, shadow } from '../lib/tokens'
+import { cn } from '../lib/utils'
 
 interface InsightResponse {
   summary:     string
@@ -33,222 +33,110 @@ export default function InsightsPanel({ hasHoldings }: { hasHoldings: boolean })
     queryClient.invalidateQueries({ queryKey: ['insights'] })
   }
 
-  // ── Shared card wrapper ────────────────────────────────────────────────────
-  const card = (content: React.ReactNode) => (
-    <div style={{
-      background:   colors.surface,
-      borderRadius: radius.lg,
-      padding:      '20px 22px',
-      marginBottom: 16,
-      border:       `1px solid ${colors.border}`,
-      boxShadow:    shadow.sm,
-      display:      'flex',
-      flexDirection:'column',
-      gap:          0,
-    }}>
-      {content}
+  const header = (generatedAt?: string) => (
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+          <Sparkles size={13} className="text-indigo-400" />
+        </div>
+        <span className="text-white font-semibold text-sm">AI Insights</span>
+        {generatedAt && (
+          <span className="text-slate-600 text-xs">{timeAgo(generatedAt)}</span>
+        )}
+      </div>
+      <button
+        onClick={handleRefresh}
+        title="Refresh insights"
+        className="text-slate-500 hover:text-indigo-400 transition-colors p-1"
+      >
+        <RotateCw size={14} />
+      </button>
     </div>
   )
 
-  // ── Empty state ────────────────────────────────────────────────────────────
   if (!hasHoldings) {
-    return card(
-      <>
-        <Header onRefresh={handleRefresh} refreshDisabled />
-        <p style={s.muted}>
+    return (
+      <div className="glass rounded-2xl p-4 md:p-6 mb-4">
+        {header()}
+        <p className="text-slate-500 text-sm text-center my-8">
           Connect a brokerage account to unlock AI portfolio analysis.
         </p>
-      </>
+      </div>
     )
   }
 
-  // ── Loading ────────────────────────────────────────────────────────────────
   if (isLoading) {
-    return card(
-      <>
-        <Header onRefresh={handleRefresh} refreshDisabled />
-        <div style={{ padding: '4px 0' }}>
-          <div style={{ ...s.skeletonLine, width: '90%' }} />
-          <div style={{ ...s.skeletonLine, width: '75%', marginTop: 8 }} />
-          <div style={{ ...s.skeletonLine, width: '60%', marginTop: 8 }} />
+    return (
+      <div className="glass rounded-2xl p-4 md:p-6 mb-4">
+        {header()}
+        <div className="flex flex-col gap-2">
+          <div className="skeleton h-4 rounded w-full" />
+          <div className="skeleton h-4 rounded w-4/5" />
+          <div className="skeleton h-4 rounded w-3/5" />
         </div>
-        <p style={{ ...s.muted, marginTop: 12 }}>Analysing your portfolio with Llama 3.3…</p>
-      </>
+        <p className="text-slate-600 text-xs mt-4">Analysing your portfolio with AI…</p>
+      </div>
     )
   }
 
-  // ── Error ──────────────────────────────────────────────────────────────────
   if (isError) {
     const msg = (error as { response?: { status: number } })?.response?.status === 503
       ? 'AI service is offline. Start the AI service and refresh.'
       : 'Could not load insights. Please try again.'
-    return card(
-      <>
-        <Header onRefresh={handleRefresh} />
-        <p style={{ ...s.muted, color: colors.dangerText }}>{msg}</p>
-      </>
+    return (
+      <div className="glass rounded-2xl p-4 md:p-6 mb-4">
+        {header()}
+        <p className="text-red-400 text-sm">{msg}</p>
+      </div>
     )
   }
 
   if (!data) return null
 
-  // ── Insights ───────────────────────────────────────────────────────────────
-  return card(
-    <>
-      <Header onRefresh={handleRefresh} generatedAt={data.generatedAt} />
+  return (
+    <div className="glass rounded-2xl p-4 md:p-6 mb-4">
+      {header(data.generatedAt)}
 
       {/* Summary */}
-      <p style={s.summary}>{data.summary}</p>
+      <p className="text-slate-300 text-sm leading-relaxed mb-4">{data.summary}</p>
 
-      {/* Risk Flags */}
+      {/* Risk flags */}
       {data.riskFlags?.length > 0 && (
-        <section style={s.section}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-            <AlertTriangle size={13} color={colors.warning} />
-            <p style={s.sectionLabel}>Risk Flags</p>
+        <div className="mb-4">
+          <div className="flex items-center gap-1.5 mb-2">
+            <AlertTriangle size={13} className="text-amber-400" />
+            <span className="label-xs text-amber-400/80">Risk Flags</span>
           </div>
-          <ul style={s.list}>
+          <ul className="flex flex-col gap-1.5">
             {data.riskFlags.map((flag, i) => (
-              <li key={i} style={{ ...s.listItem, ...s.flagItem }}>{flag}</li>
+              <li key={i}
+                className="flex items-start gap-2 bg-amber-500/[0.06] border border-amber-500/10 rounded-lg px-3 py-2 text-xs text-amber-300/80">
+                <span className="mt-0.5 shrink-0">⚠</span>
+                {flag}
+              </li>
             ))}
           </ul>
-        </section>
+        </div>
       )}
 
       {/* Suggestions */}
       {data.suggestions?.length > 0 && (
-        <section style={s.section}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-            <Lightbulb size={13} color={colors.success} />
-            <p style={s.sectionLabel}>Suggestions</p>
+        <div>
+          <div className="flex items-center gap-1.5 mb-2">
+            <Lightbulb size={13} className="text-emerald-400" />
+            <span className={cn('label-xs', 'text-emerald-400/80')}>Suggestions</span>
           </div>
-          <ul style={s.list}>
-            {data.suggestions.map((suggestion, i) => (
-              <li key={i} style={{ ...s.listItem, ...s.suggestionItem }}>{suggestion}</li>
+          <ul className="flex flex-col gap-1.5">
+            {data.suggestions.map((s, i) => (
+              <li key={i}
+                className="flex items-start gap-2 bg-emerald-500/[0.06] border border-emerald-500/10 rounded-lg px-3 py-2 text-xs text-emerald-300/80">
+                <span className="mt-0.5 shrink-0">💡</span>
+                {s}
+              </li>
             ))}
           </ul>
-        </section>
+        </div>
       )}
-    </>
-  )
-}
-
-// ── Header ─────────────────────────────────────────────────────────────────────
-function Header({
-  onRefresh,
-  generatedAt,
-  refreshDisabled = false,
-}: {
-  onRefresh:       () => void
-  generatedAt?:    string
-  refreshDisabled?: boolean
-}) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{
-          width:        28,
-          height:       28,
-          borderRadius: radius.sm,
-          background:   colors.brandBg,
-          display:      'flex',
-          alignItems:   'center',
-          justifyContent: 'center',
-          flexShrink:   0,
-        }}>
-          <Sparkles size={13} color={colors.brand} />
-        </div>
-        <div>
-          <span style={{ fontWeight: 700, fontSize: 14, color: colors.text }}>AI Portfolio Insights</span>
-          {generatedAt && (
-            <span style={{ marginLeft: 8, fontSize: 11, color: colors.textMuted }}>
-              Updated {timeAgo(generatedAt)}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <button
-        onClick={onRefresh}
-        disabled={refreshDisabled}
-        title="Refresh insights"
-        style={{
-          display:     'flex',
-          alignItems:  'center',
-          gap:         5,
-          background:  'none',
-          border:      `1px solid ${colors.border}`,
-          borderRadius: radius.sm,
-          padding:     '5px 10px',
-          fontSize:    12,
-          cursor:      refreshDisabled ? 'not-allowed' : 'pointer',
-          color:       refreshDisabled ? colors.textMuted : colors.textSecondary,
-          transition:  'all 0.15s',
-          minHeight:   30,
-        }}
-        onMouseEnter={(e) => { if (!refreshDisabled) { e.currentTarget.style.borderColor = colors.brand; e.currentTarget.style.color = colors.brand } }}
-        onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = refreshDisabled ? colors.textMuted : colors.textSecondary }}
-      >
-        <RotateCw size={12} />
-        Refresh
-      </button>
     </div>
   )
-}
-
-// ── Styles ─────────────────────────────────────────────────────────────────────
-const s: Record<string, React.CSSProperties> = {
-  summary: {
-    fontSize:   14,
-    lineHeight: 1.65,
-    color:      colors.textSecondary,
-    margin:     '0 0 14px',
-  },
-  section: {
-    marginTop: 12,
-  },
-  sectionLabel: {
-    fontWeight: 600,
-    fontSize:   12,
-    margin:     0,
-    color:      colors.text,
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  },
-  list: {
-    listStyle:     'none',
-    margin:        0,
-    padding:       0,
-    display:       'flex',
-    flexDirection: 'column',
-    gap:           5,
-  },
-  listItem: {
-    fontSize:   13,
-    lineHeight: 1.5,
-    padding:    '7px 12px',
-    borderRadius: radius.sm,
-  },
-  flagItem: {
-    background:  colors.warningBg,
-    color:       colors.warningText,
-    borderLeft:  `3px solid ${colors.warning}`,
-  },
-  suggestionItem: {
-    background: colors.successBg,
-    color:      colors.successText,
-    borderLeft: `3px solid ${colors.success}`,
-  },
-  muted: {
-    fontSize: 13,
-    color:    colors.textMuted,
-    margin:   0,
-  },
-  skeletonLine: {
-    height:          14,
-    background:      'linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)',
-    backgroundSize:  '200% 100%',
-    borderRadius:    radius.xs,
-    animation:       'shimmer 1.5s infinite',
-  } as React.CSSProperties,
 }

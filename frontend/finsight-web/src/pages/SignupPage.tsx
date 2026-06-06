@@ -1,39 +1,38 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import {
   Sparkles, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, CheckCircle2,
 } from 'lucide-react'
 import api from '../lib/api'
-import { colors, radius, shadow } from '../lib/tokens'
+import { cn } from '../lib/utils'
 
-// ── Password strength ─────────────────────────────────────────────────────────
+// ── Password strength ──────────────────────────────────────────────────────────
 type Strength = 'none' | 'weak' | 'fair' | 'strong'
 
 function getStrength(pwd: string): Strength {
   if (!pwd) return 'none'
   let score = 0
-  if (pwd.length >= 8)  score++
-  if (pwd.length >= 12) score++
-  if (/[A-Z]/.test(pwd)) score++
-  if (/[0-9]/.test(pwd)) score++
-  if (/[^A-Za-z0-9]/.test(pwd)) score++
+  if (pwd.length >= 8)            score++
+  if (pwd.length >= 12)           score++
+  if (/[A-Z]/.test(pwd))          score++
+  if (/[0-9]/.test(pwd))          score++
+  if (/[^A-Za-z0-9]/.test(pwd))   score++
   if (score <= 1) return 'weak'
   if (score <= 3) return 'fair'
   return 'strong'
 }
 
 const STRENGTH_META: Record<Strength, { label: string; color: string; bars: number }> = {
-  none:   { label: '',        color: colors.border,   bars: 0 },
-  weak:   { label: 'Weak',   color: colors.danger,   bars: 1 },
-  fair:   { label: 'Fair',   color: colors.warning,  bars: 2 },
-  strong: { label: 'Strong', color: colors.success,  bars: 3 },
+  none:   { label: '',        color: 'rgba(255,255,255,0.06)', bars: 0 },
+  weak:   { label: 'Weak',   color: '#ef4444',                bars: 1 },
+  fair:   { label: 'Fair',   color: '#f59e0b',                bars: 2 },
+  strong: { label: 'Strong', color: '#10b981',                bars: 3 },
 }
 
 export default function SignupPage() {
   const navigate = useNavigate()
 
-  // Clear any stale tokens so a returning user can sign up cleanly
-  // without a leftover Bearer header triggering a 401 on the register endpoint
   useEffect(() => {
     localStorage.removeItem('finsight_token')
     localStorage.removeItem('finsight_refresh_token')
@@ -47,11 +46,11 @@ export default function SignupPage() {
   const [error,           setError]           = useState('')
   const [isLoading,       setIsLoading]       = useState(false)
 
-  const strength         = getStrength(password)
-  const strengthMeta     = STRENGTH_META[strength]
-  const passwordsMatch   = confirmPassword === '' || password === confirmPassword
-  const confirmDone      = confirmPassword.length > 0
-  const canSubmit        = email && password.length >= 8 && password === confirmPassword
+  const strength       = getStrength(password)
+  const strengthMeta   = STRENGTH_META[strength]
+  const passwordsMatch = confirmPassword === '' || password === confirmPassword
+  const confirmDone    = confirmPassword.length > 0
+  const canSubmit      = email && password.length >= 8 && password === confirmPassword
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -67,9 +66,7 @@ export default function SignupPage() {
       const detail = (err as { response?: { data?: { detail?: string } } })
         ?.response?.data?.detail ?? ''
       if (detail.toLowerCase().includes('already registered')) {
-        setError('An account with this email already exists. Sign in instead.')
-      } else if (detail.toLowerCase().includes('password')) {
-        setError('Password must be at least 8 characters.')
+        setError('An account with this email already exists.')
       } else {
         setError('Something went wrong. Please try again.')
       }
@@ -79,292 +76,134 @@ export default function SignupPage() {
   }
 
   return (
-    <div style={{
-      minHeight:      '100vh',
-      background:     `linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)`,
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      padding:        '24px 16px',
-    }}>
-      <div style={{
-        width:        '100%',
-        maxWidth:     420,
-        background:   colors.surface,
-        borderRadius: radius.xl,
-        boxShadow:    shadow.xl,
-        overflow:     'hidden',
-      }}>
+    <div className="min-h-screen bg-[#050510] flex items-center justify-center px-4 py-12 relative overflow-hidden">
+      <div className="absolute top-1/3 left-1/3 w-[500px] h-[500px] bg-indigo-600/[0.07] rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-violet-900/[0.12] rounded-full blur-3xl pointer-events-none" />
 
-        {/* ── Header band ──────────────────────────────────────────────── */}
-        <div style={{
-          background: `linear-gradient(135deg, ${colors.brand} 0%, ${colors.brandDark} 100%)`,
-          padding:    '28px 32px',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <div style={{
-              width:          36,
-              height:         36,
-              borderRadius:   radius.md,
-              background:     'rgba(255,255,255,0.2)',
-              display:        'flex',
-              alignItems:     'center',
-              justifyContent: 'center',
-            }}>
-              <Sparkles size={18} color="#fff" />
-            </div>
-            <span style={{ color: '#fff', fontWeight: 800, fontSize: 20, letterSpacing: '-0.5px' }}>
-              FinSight
-            </span>
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: 'easeOut' }}
+        className="w-full max-w-sm"
+      >
+        {/* Logo lockup */}
+        <div className="flex items-center justify-center gap-3 mb-10">
+          <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-glow">
+            <Sparkles size={18} className="text-white" />
           </div>
-          <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 700, margin: '0 0 4px', letterSpacing: '-0.3px' }}>
-            Create your account
-          </h1>
-          <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, margin: 0 }}>
-            Start tracking your portfolio with AI
-          </p>
+          <div>
+            <p className="text-white font-bold text-lg tracking-tight leading-none">FinSight</p>
+            <p className="text-indigo-400/60 text-2xs tracking-widest uppercase mt-0.5">AI Copilot</p>
+          </div>
         </div>
 
-        {/* ── Form ─────────────────────────────────────────────────────── */}
-        <form onSubmit={handleSubmit} style={{ padding: '28px 32px 32px' }}>
+        <div className="glass rounded-2xl p-8">
+          <h1 className="text-xl font-bold text-white mb-1 tracking-tight">Create account</h1>
+          <p className="text-slate-500 text-sm mb-7">Start your AI portfolio journey</p>
 
-          {/* Email */}
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Email</label>
-            <div style={{ position: 'relative' }}>
-              <Mail size={16} color={colors.textMuted} style={iconStyle} />
-              <input
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                style={inputStyle}
-                onFocus={(e)  => { e.currentTarget.style.borderColor = colors.brand }}
-                onBlur={(e)   => { e.currentTarget.style.borderColor = colors.border }}
-              />
-            </div>
-          </div>
-
-          {/* Password */}
-          <div style={{ marginBottom: 6 }}>
-            <label style={labelStyle}>Password</label>
-            <div style={{ position: 'relative' }}>
-              <Lock size={16} color={colors.textMuted} style={iconStyle} />
-              <input
-                type={showPwd ? 'text' : 'password'}
-                placeholder="Min. 8 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-                autoComplete="new-password"
-                style={{ ...inputStyle, paddingRight: 44 }}
-                onFocus={(e)  => { e.currentTarget.style.borderColor = colors.brand }}
-                onBlur={(e)   => { e.currentTarget.style.borderColor = colors.border }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPwd(v => !v)}
-                style={eyeStyle}
-                tabIndex={-1}
-              >
-                {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </div>
-          </div>
-
-          {/* Strength meter */}
-          {password.length > 0 && (
-            <div style={{ marginBottom: 14, marginTop: 8 }}>
-              <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-                {[1, 2, 3].map((bar) => (
-                  <div
-                    key={bar}
-                    style={{
-                      flex:         1,
-                      height:       4,
-                      borderRadius: 2,
-                      background:   strengthMeta.bars >= bar ? strengthMeta.color : colors.border,
-                      transition:   'background 0.2s',
-                    }}
-                  />
-                ))}
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {/* Email */}
+            <div>
+              <label className="label-xs mb-2 block">Email</label>
+              <div className="relative">
+                <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <input type="email" placeholder="you@example.com" value={email}
+                  onChange={e => setEmail(e.target.value)} required autoComplete="email"
+                  className="input-field pl-10" />
               </div>
-              {strengthMeta.label && (
-                <p style={{ margin: 0, fontSize: 11, color: strengthMeta.color, fontWeight: 500 }}>
-                  {strengthMeta.label} password
-                  {strength === 'weak' && ' — try adding numbers or symbols'}
-                </p>
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="label-xs mb-2 block">Password</label>
+              <div className="relative">
+                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <input type={showPwd ? 'text' : 'password'} placeholder="Min. 8 characters"
+                  value={password} onChange={e => setPassword(e.target.value)}
+                  required minLength={8} autoComplete="new-password"
+                  className="input-field pl-10 pr-11" />
+                <button type="button" onClick={() => setShowPwd(v => !v)} tabIndex={-1}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1">
+                  {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              {/* Strength meter */}
+              {password.length > 0 && (
+                <div className="mt-2">
+                  <div className="flex gap-1 mb-1">
+                    {[1, 2, 3].map(bar => (
+                      <div key={bar} className="flex-1 h-1 rounded-full transition-colors duration-200"
+                        style={{ background: strengthMeta.bars >= bar ? strengthMeta.color : 'rgba(255,255,255,0.06)' }} />
+                    ))}
+                  </div>
+                  {strengthMeta.label && (
+                    <p className="text-xs" style={{ color: strengthMeta.color }}>
+                      {strengthMeta.label} password
+                      {strength === 'weak' && ' — try adding numbers or symbols'}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
-          )}
 
-          {/* Confirm password */}
-          <div style={{ marginBottom: 20 }}>
-            <label style={labelStyle}>Confirm Password</label>
-            <div style={{ position: 'relative' }}>
-              {confirmDone && (
-                passwordsMatch
-                  ? <CheckCircle2 size={16} color={colors.success} style={iconStyle} />
-                  : <AlertCircle  size={16} color={colors.danger}  style={iconStyle} />
+            {/* Confirm password */}
+            <div>
+              <label className="label-xs mb-2 block">Confirm Password</label>
+              <div className="relative">
+                {confirmDone
+                  ? passwordsMatch
+                    ? <CheckCircle2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-400 pointer-events-none" />
+                    : <AlertCircle  size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-red-400 pointer-events-none" />
+                  : <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                }
+                <input
+                  type={showConfirm ? 'text' : 'password'}
+                  placeholder="Re-enter your password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                  className={cn('input-field pl-10 pr-11', confirmDone && !passwordsMatch && 'border-red-500/40')}
+                />
+                <button type="button" onClick={() => setShowConfirm(v => !v)} tabIndex={-1}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1">
+                  {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              {confirmDone && !passwordsMatch && (
+                <p className="text-red-400 text-xs mt-1">Passwords don't match</p>
               )}
-              {!confirmDone && <Lock size={16} color={colors.textMuted} style={iconStyle} />}
-              <input
-                type={showConfirm ? 'text' : 'password'}
-                placeholder="Re-enter your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-                style={{
-                  ...inputStyle,
-                  paddingRight:  44,
-                  borderColor:   confirmDone && !passwordsMatch ? colors.danger : colors.border,
-                }}
-                onFocus={(e)  => {
-                  if (!confirmDone || passwordsMatch) e.currentTarget.style.borderColor = colors.brand
-                }}
-                onBlur={(e)   => {
-                  e.currentTarget.style.borderColor =
-                    confirmDone && !passwordsMatch ? colors.danger : colors.border
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirm(v => !v)}
-                style={eyeStyle}
-                tabIndex={-1}
-              >
-                {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
             </div>
-            {confirmDone && !passwordsMatch && (
-              <p style={{ margin: '5px 0 0', fontSize: 12, color: colors.dangerText }}>
-                Passwords don't match
-              </p>
+
+            {/* Error */}
+            {error && (
+              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2.5 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-red-400 text-sm">
+                <AlertCircle size={14} className="shrink-0" />
+                <span>
+                  {error}
+                  {error.includes('already exists') && (
+                    <>{' '}<Link to="/login" className="text-indigo-400 underline font-semibold">Sign in</Link></>
+                  )}
+                </span>
+              </motion.div>
             )}
-          </div>
 
-          {/* Error banner */}
-          {error && (
-            <div style={{
-              display:      'flex',
-              alignItems:   'center',
-              gap:          8,
-              background:   colors.dangerBg,
-              border:       `1px solid #fca5a5`,
-              borderRadius: radius.md,
-              padding:      '10px 14px',
-              marginBottom: 16,
-              fontSize:     13,
-              color:        colors.dangerText,
-            }}>
-              <AlertCircle size={14} style={{ flexShrink: 0 }} />
-              <span>
-                {error}
-                {error.includes('already exists') && (
-                  <>
-                    {' '}
-                    <Link to="/login" style={{ color: colors.brand, fontWeight: 600, textDecoration: 'underline' }}>
-                      Sign in
-                    </Link>
-                  </>
-                )}
-              </span>
-            </div>
-          )}
+            {/* Submit */}
+            <button type="submit" disabled={!canSubmit || isLoading}
+              className={cn('btn-primary w-full mt-1', (!canSubmit || isLoading) && 'opacity-50 cursor-not-allowed')}>
+              {isLoading ? 'Creating account…' : (<>Create account <ArrowRight size={15} /></>)}
+            </button>
+          </form>
 
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={!canSubmit || isLoading}
-            style={{
-              width:          '100%',
-              padding:        '13px 20px',
-              background:     !canSubmit || isLoading ? '#e2e8f0' : colors.brand,
-              color:          !canSubmit || isLoading ? colors.textMuted : '#fff',
-              border:         'none',
-              borderRadius:   radius.md,
-              fontSize:       15,
-              fontWeight:     600,
-              cursor:         !canSubmit || isLoading ? 'not-allowed' : 'pointer',
-              display:        'flex',
-              alignItems:     'center',
-              justifyContent: 'center',
-              gap:            8,
-              transition:     'background 0.15s',
-              minHeight:      48,
-              letterSpacing:  '-0.2px',
-              boxShadow:      canSubmit && !isLoading ? `0 2px 8px ${colors.brand}40` : 'none',
-            }}
-            onMouseEnter={(e) => { if (canSubmit && !isLoading) e.currentTarget.style.background = colors.brandDark }}
-            onMouseLeave={(e) => { if (canSubmit && !isLoading) e.currentTarget.style.background = colors.brand }}
-          >
-            {isLoading ? 'Creating account…' : (
-              <>Create account <ArrowRight size={16} /></>
-            )}
-          </button>
-
-          {/* Sign in link */}
-          <p style={{ textAlign: 'center', fontSize: 13, color: colors.textMuted, marginTop: 16, marginBottom: 0 }}>
+          <p className="text-center text-sm text-slate-500 mt-5">
             Already have an account?{' '}
-            <Link
-              to="/login"
-              style={{ color: colors.brand, fontWeight: 600, textDecoration: 'none' }}
-            >
+            <Link to="/login" className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
               Sign in
             </Link>
           </p>
-        </form>
-      </div>
+        </div>
+      </motion.div>
     </div>
   )
-}
-
-// ── Shared input styles ───────────────────────────────────────────────────────
-const labelStyle: React.CSSProperties = {
-  display:       'block',
-  fontSize:      12,
-  fontWeight:    600,
-  color:         colors.textSecondary,
-  marginBottom:  6,
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-}
-
-const inputStyle: React.CSSProperties = {
-  width:        '100%',
-  padding:      '12px 14px 12px 38px',
-  borderRadius: radius.md,
-  border:       `1.5px solid ${colors.border}`,
-  fontSize:     16,       // prevents iOS zoom
-  fontFamily:   'inherit',
-  color:        colors.text,
-  outline:      'none',
-  transition:   'border-color 0.15s',
-  background:   '#fafafa',
-}
-
-const iconStyle: React.CSSProperties = {
-  position:       'absolute',
-  left:           13,
-  top:            '50%',
-  transform:      'translateY(-50%)',
-  pointerEvents:  'none',
-}
-
-const eyeStyle: React.CSSProperties = {
-  position:       'absolute',
-  right:          12,
-  top:            '50%',
-  transform:      'translateY(-50%)',
-  background:     'none',
-  border:         'none',
-  cursor:         'pointer',
-  color:          colors.textMuted,
-  display:        'flex',
-  alignItems:     'center',
-  padding:        4,
 }

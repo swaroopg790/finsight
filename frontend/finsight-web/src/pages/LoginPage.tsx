@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { Sparkles, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react'
 import api from '../lib/api'
-import { colors, radius, shadow } from '../lib/tokens'
+import { cn } from '../lib/utils'
 
 export default function LoginPage() {
-  const navigate    = useNavigate()
+  const navigate = useNavigate()
 
-  // Clear stale tokens on mount — a user who lands here should start fresh
   useEffect(() => {
     localStorage.removeItem('finsight_token')
     localStorage.removeItem('finsight_refresh_token')
@@ -36,198 +36,123 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{
-      minHeight:  '100vh',
-      background: `linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)`,
-      display:    'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding:    '24px 16px',
-    }}>
-      {/* Card */}
-      <div style={{
-        width:        '100%',
-        maxWidth:     400,
-        background:   colors.surface,
-        borderRadius: radius.xl,
-        boxShadow:    shadow.xl,
-        overflow:     'hidden',
-      }}>
-        {/* Header band */}
-        <div style={{
-          background: `linear-gradient(135deg, ${colors.brand} 0%, ${colors.brandDark} 100%)`,
-          padding:    '28px 32px',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <div style={{
-              width:        36,
-              height:       36,
-              borderRadius: radius.md,
-              background:   'rgba(255,255,255,0.2)',
-              display:      'flex',
-              alignItems:   'center',
-              justifyContent: 'center',
-            }}>
-              <Sparkles size={18} color="#fff" />
-            </div>
-            <span style={{ color: '#fff', fontWeight: 800, fontSize: 20, letterSpacing: '-0.5px' }}>
-              FinSight
-            </span>
+    <div className="min-h-screen bg-[#050510] flex items-center justify-center px-4 py-12 relative overflow-hidden">
+      {/* Ambient glow orbs */}
+      <div className="absolute top-1/3 left-1/3 w-[500px] h-[500px] bg-indigo-600/[0.07] rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-violet-900/[0.12] rounded-full blur-3xl pointer-events-none" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: 'easeOut' }}
+        className="w-full max-w-sm"
+      >
+        {/* Logo lockup */}
+        <div className="flex items-center justify-center gap-3 mb-10">
+          <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-glow">
+            <Sparkles size={18} className="text-white" />
           </div>
-          <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 700, margin: '0 0 4px', letterSpacing: '-0.3px' }}>
-            Welcome back
-          </h1>
-          <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, margin: 0 }}>
-            Your AI portfolio copilot
-          </p>
+          <div>
+            <p className="text-white font-bold text-lg tracking-tight leading-none">FinSight</p>
+            <p className="text-indigo-400/60 text-2xs tracking-widest uppercase mt-0.5">AI Copilot</p>
+          </div>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} style={{ padding: '28px 32px 32px' }}>
-          {/* Email */}
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: colors.textSecondary, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Email
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Mail size={16} color={colors.textMuted} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-              <input
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                style={{
-                  width:        '100%',
-                  padding:      '12px 14px 12px 38px',
-                  borderRadius: radius.md,
-                  border:       `1.5px solid ${colors.border}`,
-                  fontSize:     16,   // prevents iOS zoom
-                  fontFamily:   'inherit',
-                  color:        colors.text,
-                  outline:      'none',
-                  transition:   'border-color 0.15s',
-                  background:   '#fafafa',
-                }}
-                onFocus={(e)  => { e.currentTarget.style.borderColor = colors.brand }}
-                onBlur={(e)   => { e.currentTarget.style.borderColor = colors.border }}
-              />
-            </div>
-          </div>
+        {/* Card */}
+        <div className="glass rounded-2xl p-8">
+          <h1 className="text-xl font-bold text-white mb-1 tracking-tight">Welcome back</h1>
+          <p className="text-slate-500 text-sm mb-7">Sign in to your portfolio dashboard</p>
 
-          {/* Password */}
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: colors.textSecondary, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Password
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Lock size={16} color={colors.textMuted} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-              <input
-                type={showPwd ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                style={{
-                  width:        '100%',
-                  padding:      '12px 44px 12px 38px',
-                  borderRadius: radius.md,
-                  border:       `1.5px solid ${colors.border}`,
-                  fontSize:     16,
-                  fontFamily:   'inherit',
-                  color:        colors.text,
-                  outline:      'none',
-                  transition:   'border-color 0.15s',
-                  background:   '#fafafa',
-                }}
-                onFocus={(e)  => { e.currentTarget.style.borderColor = colors.brand }}
-                onBlur={(e)   => { e.currentTarget.style.borderColor = colors.border }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPwd(v => !v)}
-                tabIndex={-1}
-                style={{
-                  position:   'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color:      colors.textMuted, display: 'flex', alignItems: 'center', padding: 4,
-                }}
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {/* Email */}
+            <div>
+              <label className="label-xs mb-2 block">Email</label>
+              <div className="relative">
+                <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="input-field pl-10"
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="label-xs mb-2 block">Password</label>
+              <div className="relative">
+                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <input
+                  type={showPwd ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  className="input-field pl-10 pr-11"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPwd(v => !v)}
+                  tabIndex={-1}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1"
+                >
+                  {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Error */}
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2.5 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-red-400 text-sm"
               >
-                {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </div>
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div style={{
-              display:     'flex',
-              alignItems:  'center',
-              gap:         8,
-              background:  colors.dangerBg,
-              border:      `1px solid #fca5a5`,
-              borderRadius: radius.md,
-              padding:     '10px 14px',
-              marginBottom: 16,
-              fontSize:    13,
-              color:       colors.dangerText,
-            }}>
-              <AlertCircle size={14} style={{ flexShrink: 0 }} />
-              {error}
-            </div>
-          )}
-
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={isLoading}
-            style={{
-              width:        '100%',
-              padding:      '13px 20px',
-              background:   isLoading ? colors.brandLight : colors.brand,
-              color:        '#fff',
-              border:       'none',
-              borderRadius: radius.md,
-              fontSize:     15,
-              fontWeight:   600,
-              cursor:       isLoading ? 'not-allowed' : 'pointer',
-              display:      'flex',
-              alignItems:   'center',
-              justifyContent: 'center',
-              gap:          8,
-              transition:   'background 0.15s, transform 0.1s',
-              minHeight:    48,
-              letterSpacing: '-0.2px',
-            }}
-            onMouseEnter={(e) => { if (!isLoading) e.currentTarget.style.background = colors.brandDark }}
-            onMouseLeave={(e) => { if (!isLoading) e.currentTarget.style.background = colors.brand }}
-          >
-            {isLoading ? (
-              'Signing in…'
-            ) : (
-              <>
-                Sign in
-                <ArrowRight size={16} />
-              </>
+                <AlertCircle size={14} className="shrink-0" />
+                {error}
+              </motion.div>
             )}
-          </button>
 
-          <p style={{ textAlign: 'center', color: colors.textMuted, fontSize: 12, marginTop: 16, marginBottom: 0 }}>
-            Sandbox: <code style={{ background: '#f1f5f9', padding: '1px 5px', borderRadius: 3 }}>user_good</code> / <code style={{ background: '#f1f5f9', padding: '1px 5px', borderRadius: 3 }}>pass_good</code>
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className={cn('btn-primary w-full mt-1', isLoading && 'opacity-60 cursor-not-allowed')}
+            >
+              {isLoading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Signing in…
+                </span>
+              ) : (
+                <>Sign in <ArrowRight size={15} /></>
+              )}
+            </button>
+          </form>
+
+          {/* Sandbox hint */}
+          <p className="text-center text-slate-600 text-xs mt-5">
+            Sandbox:{' '}
+            <code className="bg-white/[0.06] px-1.5 py-0.5 rounded text-slate-400 text-xs">user_good</code>
+            {' / '}
+            <code className="bg-white/[0.06] px-1.5 py-0.5 rounded text-slate-400 text-xs">pass_good</code>
           </p>
 
-          <p style={{ textAlign: 'center', fontSize: 13, color: colors.textMuted, marginTop: 12, marginBottom: 0 }}>
-            Don't have an account?{' '}
-            <Link
-              to="/signup"
-              style={{ color: colors.brand, fontWeight: 600, textDecoration: 'none' }}
-            >
-              Create account
+          <p className="text-center text-sm text-slate-500 mt-4">
+            No account?{' '}
+            <Link to="/signup" className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
+              Create one
             </Link>
           </p>
-        </form>
-      </div>
+        </div>
+      </motion.div>
     </div>
   )
 }

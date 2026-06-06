@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import {
   Wallet, TrendingUp, TrendingDown, RefreshCw, Unlink, ChevronUp, ChevronDown,
   Target, ChevronRight, Newspaper,
@@ -13,10 +14,10 @@ import PerformanceChart  from '../components/PerformanceChart'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 import { useCountUp }    from '../hooks/useCountUp'
 import api               from '../lib/api'
-import { colors, radius, shadow } from '../lib/tokens'
 import { liveRefetchInterval } from '../lib/marketHours'
+import { cn, fmtCurrency } from '../lib/utils'
 
-// ── Net worth mini-card type ───────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 interface DashNetWorth {
   netWorth:         number
   totalAssets:      number
@@ -25,7 +26,6 @@ interface DashNetWorth {
   changeTodayPct:   number
 }
 
-// ── Goal types (dashboard strip only) ─────────────────────────────────────────
 interface DashGoal {
   id:               string
   name:             string
@@ -63,19 +63,16 @@ interface Account {
 type SortKey = 'value' | 'gain' | 'pct'
 type SortDir = 'asc' | 'desc'
 
-// ── Format helpers ─────────────────────────────────────────────────────────────
-const fmtUsd = (v: number, decimals = 2) =>
-  '$' + v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
-
 function goalProbColor(p: number) {
-  if (p >= 0.75) return '#16a34a'
-  if (p >= 0.50) return '#d97706'
-  return '#dc2626'
+  if (p >= 0.75) return 'text-emerald-400'
+  if (p >= 0.50) return 'text-amber-400'
+  return 'text-red-400'
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const navigate     = useNavigate()
-  const queryClient  = useQueryClient()
+  const navigate    = useNavigate()
+  const queryClient = useQueryClient()
   const { isMobile, isTablet } = useBreakpoint()
 
   const [pricesSyncing,   setPricesSyncing]   = useState(false)
@@ -86,27 +83,25 @@ export default function DashboardPage() {
 
   const { data: holdings = [], isLoading: holdingsLoading } = useQuery<Holding[]>({
     queryKey: ['holdings'],
-    queryFn:  () => api.get('/portfolio/holdings').then((r) => r.data),
-    // Auto-refresh every 30 s during NYSE market hours; pauses outside hours
+    queryFn:  () => api.get('/portfolio/holdings').then(r => r.data),
     refetchInterval: liveRefetchInterval(),
   })
 
   const { data: accounts = [], isLoading: accountsLoading } = useQuery<Account[]>({
     queryKey: ['accounts'],
-    queryFn:  () => api.get('/portfolio/accounts').then((r) => r.data),
+    queryFn:  () => api.get('/portfolio/accounts').then(r => r.data),
   })
 
   const { data: dashGoals = [] } = useQuery<DashGoal[]>({
     queryKey: ['goals'],
-    queryFn:  () => api.get('/goals').then((r) => r.data),
+    queryFn:  () => api.get('/goals').then(r => r.data),
   })
 
   const { data: dashNetWorth } = useQuery<DashNetWorth>({
     queryKey: ['networth-summary'],
-    queryFn:  () => api.get('/networth/summary').then((r) => r.data),
+    queryFn:  () => api.get('/networth/summary').then(r => r.data),
   })
 
-  // News teaser — top 3 articles for "today's headlines" strip
   const { data: newsData } = useQuery<{
     articles: Array<{
       id: string; title: string; tickers: string[];
@@ -114,8 +109,8 @@ export default function DashboardPage() {
     }>
     aiSummary: string
   }>({
-    queryKey: ['news-feed'],
-    queryFn:  () => api.get('/news/feed').then((r) => r.data),
+    queryKey:  ['news-feed'],
+    queryFn:   () => api.get('/news/feed').then(r => r.data),
     staleTime: 10 * 60 * 1000,
   })
 
@@ -144,7 +139,6 @@ export default function DashboardPage() {
   const handleBrokerageConnected = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['accounts'] })
     queryClient.invalidateQueries({ queryKey: ['holdings'] })
-    // Full sync: accounts + holdings + transactions + snapshot + benchmarks
     api.post('/portfolio/sync').catch(() => {})
     api.post('/portfolio/refresh-prices').catch(() => {})
     setPricesSyncing(true)
@@ -160,7 +154,6 @@ export default function DashboardPage() {
   }, [queryClient])
 
   const handleSyncPrices = useCallback(() => {
-    // Full sync + price refresh — picks up transactions, snapshot, and benchmarks
     api.post('/portfolio/sync').catch(() => {})
     api.post('/portfolio/refresh-prices').catch(() => {})
     setPricesSyncing(true)
@@ -175,324 +168,176 @@ export default function DashboardPage() {
     }, 12_000)
   }, [queryClient])
 
-  useEffect(() => () => {
-    if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
-  }, [])
+  useEffect(() => () => { if (syncTimerRef.current) clearTimeout(syncTimerRef.current) }, [])
 
-  // ── Derived values ─────────────────────────────────────────────────────────
+  // ── Derived ────────────────────────────────────────────────────────────────
   const pricedCount  = holdings.filter(h => h.currentValue != null).length
   const pendingCount = holdings.filter(h => h.currentValue == null).length
   const allPriceless = holdings.length > 0 && pricedCount === 0
-
-  const totalValue    = holdings.reduce((sum, h) => sum + (h.currentValue    ?? 0), 0)
-  const totalGainLoss = holdings.reduce((sum, h) => sum + (h.unrealizedGainLoss ?? 0), 0)
-  const isGain        = totalGainLoss >= 0
-
-  // Animated counter for total value
+  const totalValue   = holdings.reduce((s, h) => s + (h.currentValue    ?? 0), 0)
+  const totalGainLoss = holdings.reduce((s, h) => s + (h.unrealizedGainLoss ?? 0), 0)
+  const isGain       = totalGainLoss >= 0
   const animatedValue = useCountUp(totalValue)
 
-  // Dedup accounts by institution for Disconnect button
   const institutionMap = accounts.reduce<Record<string, { plaidItemId: string; name: string }>>((acc, a) => {
     if (!acc[a.plaidItemId]) acc[a.plaidItemId] = { plaidItemId: a.plaidItemId, name: a.institutionName }
     return acc
   }, {})
 
-  // ── Sortable holdings ──────────────────────────────────────────────────────
   const sortedHoldings = useMemo(() => {
-    const sorted = [...holdings].sort((a, b) => {
+    return [...holdings].sort((a, b) => {
       let aVal = 0, bVal = 0
       if (sortKey === 'value') { aVal = a.currentValue ?? -Infinity; bVal = b.currentValue ?? -Infinity }
       if (sortKey === 'gain')  { aVal = a.unrealizedGainLoss ?? -Infinity; bVal = b.unrealizedGainLoss ?? -Infinity }
       if (sortKey === 'pct')   { aVal = a.unrealizedGainLossPct ?? -Infinity; bVal = b.unrealizedGainLossPct ?? -Infinity }
       return sortDir === 'desc' ? bVal - aVal : aVal - bVal
     })
-    return sorted
   }, [holdings, sortKey, sortDir])
 
   function handleSort(key: SortKey) {
-    if (sortKey === key) {
-      setSortDir(d => d === 'desc' ? 'asc' : 'desc')
-    } else {
-      setSortKey(key)
-      setSortDir('desc')
-    }
+    if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+    else { setSortKey(key); setSortDir('desc') }
   }
 
   function SortIcon({ col }: { col: SortKey }) {
-    if (sortKey !== col) return <ChevronDown size={12} color={colors.textMuted} style={{ opacity: 0.4 }} />
+    if (sortKey !== col) return <ChevronDown size={12} className="opacity-30" />
     return sortDir === 'desc'
-      ? <ChevronDown size={12} color={colors.brand} />
-      : <ChevronUp   size={12} color={colors.brand} />
+      ? <ChevronDown size={12} className="text-indigo-400" />
+      : <ChevronUp   size={12} className="text-indigo-400" />
   }
 
-  // ── Layout values ──────────────────────────────────────────────────────────
-  const outerPadding  = isMobile ? '16px' : '28px 32px'
-  const cardPadding   = isMobile ? 18 : 24
-  const valueFontSize = isMobile ? 30 : 38
-
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto', padding: outerPadding }}>
+    <div className="max-w-5xl mx-auto px-4 py-6 md:px-8 md:py-8">
 
-      {/* ── Page title ─────────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: isMobile ? 18 : 24 }}>
-        <h1 style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, margin: 0, letterSpacing: '-0.5px', color: colors.text }}>
-          Portfolio Overview
-        </h1>
-        <p style={{ color: colors.textMuted, margin: '3px 0 0', fontSize: 13 }}>
-          All your investments in one place
-        </p>
-      </div>
+      {/* Page header */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-7">
+        <h1 className="text-2xl font-bold text-white tracking-tight">Portfolio Overview</h1>
+        <p className="text-slate-500 text-sm mt-1">All your investments in one place</p>
+      </motion.div>
 
-      {/* ── Price sync banner ──────────────────────────────────────────────── */}
+      {/* Sync banner */}
       {(pricesSyncing || allPriceless) && (
-        <div style={{
-          display:        'flex',
-          flexDirection:  isMobile ? 'column' : 'row',
-          justifyContent: 'space-between',
-          alignItems:     isMobile ? 'flex-start' : 'center',
-          gap:            isMobile ? 10 : 0,
-          background:     colors.warningBg,
-          border:         `1px solid #fde68a`,
-          borderRadius:   radius.md,
-          padding:        '10px 16px',
-          marginBottom:   16,
-          fontSize:       13,
-        }}>
-          <span style={{ color: colors.warningText, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <RefreshCw size={14} style={{ animation: pricesSyncing ? 'spin 1s linear infinite' : 'none' }} />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 mb-5 text-sm text-amber-300">
+          <span className="flex items-center gap-2">
+            <RefreshCw size={14} className={pricesSyncing ? 'animate-spin' : ''} />
             {pricesSyncing
               ? 'Fetching market prices from Polygon.io…'
-              : 'Market prices not yet available — sync to load Polygon.io data.'}
+              : 'Market prices not yet available — sync to load live data.'}
           </span>
           {!pricesSyncing && (
-            <button
-              onClick={handleSyncPrices}
-              style={{
-                background:   colors.warning,
-                color:        '#fff',
-                border:       'none',
-                borderRadius: radius.sm,
-                padding:      '8px 16px',
-                fontSize:     13,
-                fontWeight:   600,
-                cursor:       'pointer',
-                minHeight:    40,
-                alignSelf:    isMobile ? 'stretch' : 'auto',
-                display:      'flex',
-                alignItems:   'center',
-                justifyContent: 'center',
-                gap:          6,
-              }}
-            >
-              <RefreshCw size={13} />
-              Sync Prices
+            <button onClick={handleSyncPrices}
+              className="flex items-center gap-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
+              <RefreshCw size={13} /> Sync Prices
             </button>
           )}
         </div>
       )}
 
-      {/* ── Summary cards ──────────────────────────────────────────────────── */}
-      <div style={{
-        display:             'grid',
-        gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-        gap:                 12,
-        marginBottom:        20,
-      }}>
-        {/* Total Value card */}
-        <div style={{
-          background:   colors.surface,
-          borderRadius: radius.lg,
-          padding:      cardPadding,
-          border:       `1px solid ${colors.border}`,
-          boxShadow:    shadow.sm,
-          borderTop:    `3px solid ${colors.brand}`,
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-            <p style={{ margin: 0, color: colors.textSecondary, fontSize: 12, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Total Portfolio Value
-            </p>
-            <div style={{
-              width:          32,
-              height:         32,
-              borderRadius:   radius.sm,
-              background:     colors.brandBg,
-              display:        'flex',
-              alignItems:     'center',
-              justifyContent: 'center',
-            }}>
-              <Wallet size={15} color={colors.brand} />
+      {/* Summary stat cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5 stagger-children">
+        {/* Total Value */}
+        <div className="glass rounded-2xl p-5 border-t border-t-indigo-500/30">
+          <div className="flex items-start justify-between mb-3">
+            <p className="label-xs">Total Portfolio Value</p>
+            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+              <Wallet size={15} className="text-indigo-400" />
             </div>
           </div>
-          <p style={{ margin: 0, fontSize: valueFontSize, fontWeight: 800, letterSpacing: '-1px', color: colors.text, lineHeight: 1 }}>
+          <p className="text-3xl font-bold text-white tracking-tight font-nums leading-none">
             ${animatedValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
           {pendingCount > 0 && (
-            <p style={{ margin: '6px 0 0', fontSize: 11, color: colors.textMuted }}>
-              +{pendingCount} position{pendingCount > 1 ? 's' : ''} awaiting market data
-            </p>
+            <p className="text-slate-600 text-xs mt-2">+{pendingCount} position{pendingCount > 1 ? 's' : ''} awaiting market data</p>
           )}
         </div>
 
-        {/* Unrealized Gain/Loss card */}
-        <div style={{
-          background:   colors.surface,
-          borderRadius: radius.lg,
-          padding:      cardPadding,
-          border:       `1px solid ${colors.border}`,
-          boxShadow:    shadow.sm,
-          borderTop:    `3px solid ${isGain ? colors.success : colors.danger}`,
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-            <p style={{ margin: 0, color: colors.textSecondary, fontSize: 12, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Unrealised Gain / Loss
-            </p>
-            <div style={{
-              width:          32,
-              height:         32,
-              borderRadius:   radius.sm,
-              background:     isGain ? colors.successBg : colors.dangerBg,
-              display:        'flex',
-              alignItems:     'center',
-              justifyContent: 'center',
-            }}>
+        {/* Unrealized Gain/Loss */}
+        <div className={cn('glass rounded-2xl p-5', isGain ? 'border-t border-t-emerald-500/30' : 'border-t border-t-red-500/30')}>
+          <div className="flex items-start justify-between mb-3">
+            <p className="label-xs">Unrealised Gain / Loss</p>
+            <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+              isGain ? 'bg-emerald-500/10' : 'bg-red-500/10')}>
               {isGain
-                ? <TrendingUp   size={15} color={colors.success} />
-                : <TrendingDown size={15} color={colors.danger}  />}
+                ? <TrendingUp   size={15} className="text-emerald-400" />
+                : <TrendingDown size={15} className="text-red-400" />}
             </div>
           </div>
-          <p style={{
-            margin:     0,
-            fontSize:   valueFontSize,
-            fontWeight: 800,
-            letterSpacing: '-1px',
-            color:      isGain ? colors.success : colors.danger,
-            lineHeight: 1,
-          }}>
-            {isGain ? '+' : ''}
-            {fmtUsd(totalGainLoss)}
+          <p className={cn('text-3xl font-bold tracking-tight font-nums leading-none',
+            isGain ? 'text-emerald-400' : 'text-red-400')}>
+            {isGain ? '+' : ''}{fmtCurrency(totalGainLoss)}
           </p>
           {pendingCount > 0 && (
-            <p style={{ margin: '6px 0 0', fontSize: 11, color: colors.textMuted }}>
-              Based on {pricedCount} priced position{pricedCount !== 1 ? 's' : ''}
-            </p>
+            <p className="text-slate-600 text-xs mt-2">Based on {pricedCount} priced position{pricedCount !== 1 ? 's' : ''}</p>
           )}
         </div>
       </div>
 
-      {/* ── Net Worth mini-card ─────────────────────────────────────────────── */}
+      {/* Net Worth mini-card */}
       {dashNetWorth && (
-        <div
+        <button
           onClick={() => navigate('/networth')}
-          style={{
-            background:   'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-            border:       `1px solid #334155`,
-            borderRadius: radius.lg,
-            padding:      '14px 20px',
-            marginBottom: 16,
-            boxShadow:    shadow.sm,
-            cursor:       'pointer',
-            display:      'flex',
-            alignItems:   'center',
-            justifyContent: 'space-between',
-            gap:          12,
-          }}
+          className="w-full text-left glass rounded-2xl px-5 py-4 mb-4 flex items-center justify-between gap-4 hover:bg-white/[0.06] transition-all duration-150 group"
         >
           <div>
-            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
-              💰 Net Worth
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 900, color: dashNetWorth.netWorth >= 0 ? '#a5b4fc' : '#fca5a5', letterSpacing: '-0.5px' }}>
+            <p className="label-xs mb-1">💰 Net Worth</p>
+            <p className={cn('text-2xl font-extrabold tracking-tight font-nums',
+              dashNetWorth.netWorth >= 0 ? 'text-indigo-300' : 'text-red-400')}>
               {dashNetWorth.netWorth < 0 ? '-' : ''}
-              {Math.abs(dashNetWorth.netWorth) >= 1_000_000
-                ? `$${(Math.abs(dashNetWorth.netWorth) / 1_000_000).toFixed(2)}M`
-                : Math.abs(dashNetWorth.netWorth) >= 1_000
-                  ? `$${(Math.abs(dashNetWorth.netWorth) / 1_000).toFixed(1)}K`
-                  : `$${Math.abs(dashNetWorth.netWorth).toLocaleString()}`}
-            </div>
+              {fmtCurrency(Math.abs(dashNetWorth.netWorth), 0)}
+            </p>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 2 }}>Today</div>
-            <div style={{
-              fontSize: 14, fontWeight: 700,
-              color: dashNetWorth.changeToday >= 0 ? '#86efac' : '#fca5a5',
-            }}>
+          <div className="text-right">
+            <p className="text-slate-500 text-xs mb-1">Today</p>
+            <p className={cn('text-sm font-bold font-nums', dashNetWorth.changeToday >= 0 ? 'text-emerald-400' : 'text-red-400')}>
               {dashNetWorth.changeToday >= 0 ? '+' : ''}
-              {dashNetWorth.changeToday >= 1000 || dashNetWorth.changeToday <= -1000
-                ? `$${(dashNetWorth.changeToday / 1000).toFixed(1)}K`
-                : `$${dashNetWorth.changeToday.toFixed(0)}`}
-            </div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>
-              {dashNetWorth.totalAssets >= 1_000_000
-                ? `$${(dashNetWorth.totalAssets / 1_000_000).toFixed(1)}M`
-                : `$${(dashNetWorth.totalAssets / 1_000).toFixed(0)}K`} assets ·{' '}
-              {dashNetWorth.totalLiabilities >= 1_000_000
-                ? `$${(dashNetWorth.totalLiabilities / 1_000_000).toFixed(1)}M`
-                : `$${(dashNetWorth.totalLiabilities / 1_000).toFixed(0)}K`} liabilities
-            </div>
+              {fmtCurrency(dashNetWorth.changeToday, 0)}
+            </p>
+            <p className="text-slate-600 text-xs">
+              {fmtCurrency(dashNetWorth.totalAssets, 0)} assets · {fmtCurrency(dashNetWorth.totalLiabilities, 0)} liabilities
+            </p>
           </div>
-          <ChevronRight size={16} color="#475569" />
-        </div>
+          <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" />
+        </button>
       )}
 
-      {/* ── Goal Progress Strip ─────────────────────────────────────────────── */}
+      {/* Goal Progress Strip */}
       {dashGoals.length > 0 && (
-        <div style={{
-          background:   colors.surface,
-          border:       `1px solid ${colors.border}`,
-          borderRadius: radius.lg,
-          padding:      '16px 20px',
-          marginBottom: 16,
-          boxShadow:    shadow.sm,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 15, color: colors.text }}>
-              <Target size={16} color="#4f46e5" />
+        <div className="glass rounded-2xl px-5 py-4 mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-white font-semibold text-sm">
+              <Target size={15} className="text-indigo-400" />
               Goal Progress
             </div>
-            <button
-              onClick={() => navigate('/goals')}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 4,
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: '#4f46e5', fontSize: 12, fontWeight: 600,
-              }}
-            >
-              View All <ChevronRight size={14} />
+            <button onClick={() => navigate('/goals')}
+              className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 text-xs font-semibold transition-colors">
+              View All <ChevronRight size={13} />
             </button>
           </div>
-          <div style={{ display: 'grid', gap: 12 }}>
+          <div className="flex flex-col gap-3">
             {dashGoals.slice(0, 3).map(g => {
               const prob  = g.projection?.successProbability ?? 0
               const progW = Math.round(g.progressFraction * 100)
-              const shortTarget = g.targetAmount >= 1_000_000
-                ? `$${(g.targetAmount / 1_000_000).toFixed(1)}M`
-                : g.targetAmount >= 1_000
-                  ? `$${(g.targetAmount / 1_000).toFixed(0)}k`
-                  : `$${g.targetAmount}`
               return (
                 <div key={g.id}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
-                    <span style={{ color: colors.text, fontWeight: 600 }}>
-                      {g.emoji} {g.name}
-                    </span>
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                      <span style={{ color: colors.textMuted }}>{g.yearsLeft}yr left</span>
-                      <span style={{ fontWeight: 700, color: goalProbColor(prob) }}>
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="text-slate-300 font-semibold">{g.emoji} {g.name}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-slate-500">{g.yearsLeft}yr left</span>
+                      <span className={cn('font-bold', goalProbColor(prob))}>
                         {(prob * 100).toFixed(0)}% odds
                       </span>
                     </div>
                   </div>
-                  <div style={{ height: 6, background: colors.pageBg, borderRadius: radius.full, overflow: 'hidden', border: `1px solid ${colors.border}` }}>
-                    <div style={{
-                      height: '100%',
-                      width: `${progW}%`,
-                      background: progW >= 100 ? '#16a34a' : '#4f46e5',
-                      borderRadius: radius.full,
-                    }} />
+                  <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.04]">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progW}%` }}
+                      transition={{ duration: 0.8, ease: 'easeOut' }}
+                      className={cn('h-full rounded-full', progW >= 100 ? 'bg-emerald-500' : 'bg-indigo-500')}
+                    />
                   </div>
-                  <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 3 }}>
-                    ${g.currentValue.toLocaleString()} of {shortTarget} · {progW}%
-                  </div>
+                  <p className="text-slate-600 text-xs mt-1">${g.currentValue.toLocaleString()} of {fmtCurrency(g.targetAmount, 0)} · {progW}%</p>
                 </div>
               )
             })}
@@ -500,91 +345,43 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Portfolio News Teaser ───────────────────────────────────────────── */}
+      {/* Portfolio News Teaser */}
       {newsData && newsData.articles.length > 0 && (
-        <div style={{
-          background:   colors.surface,
-          border:       `1px solid ${colors.border}`,
-          borderRadius: radius.lg,
-          padding:      '16px 20px',
-          marginBottom: 16,
-          boxShadow:    shadow.sm,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 15, color: colors.text }}>
-              <Newspaper size={16} color={colors.brand} />
+        <div className="glass rounded-2xl px-5 py-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 text-white font-semibold text-sm">
+              <Newspaper size={15} className="text-indigo-400" />
               Today's Headlines
             </div>
-            <button
-              onClick={() => navigate('/news')}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 4,
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: colors.brand, fontSize: 12, fontWeight: 600,
-              }}
-            >
-              All news <ChevronRight size={14} />
+            <button onClick={() => navigate('/news')}
+              className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 text-xs font-semibold transition-colors">
+              All news <ChevronRight size={13} />
             </button>
           </div>
 
-          {/* AI summary teaser */}
           {newsData.aiSummary && (
-            <div style={{
-              padding:      '10px 14px',
-              borderRadius: radius.sm,
-              background:   `${colors.brand}10`,
-              border:       `1px solid ${colors.brand}25`,
-              marginBottom: 10,
-            }}>
-              <p style={{ color: colors.text, fontSize: 12, margin: 0, lineHeight: 1.55, fontStyle: 'italic' }}>
-                "{newsData.aiSummary.length > 180
-                  ? newsData.aiSummary.slice(0, 177) + '…'
-                  : newsData.aiSummary}"
+            <div className="bg-indigo-500/[0.08] border border-indigo-500/20 rounded-xl px-4 py-3 mb-3">
+              <p className="text-slate-300 text-xs leading-relaxed italic">
+                "{newsData.aiSummary.length > 180 ? newsData.aiSummary.slice(0, 177) + '…' : newsData.aiSummary}"
               </p>
             </div>
           )}
 
-          {/* Top 3 articles */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div className="flex flex-col gap-2">
             {newsData.articles.slice(0, 3).map(a => {
               const tickers = (a.relevantTickers.length > 0 ? a.relevantTickers : a.tickers).slice(0, 3)
-              const sentColor = a.sentiment === 'BULLISH' ? '#10b981'
-                              : a.sentiment === 'BEARISH' ? '#ef4444' : '#94a3b8'
+              const dotCls = a.sentiment === 'BULLISH' ? 'bg-emerald-400'
+                           : a.sentiment === 'BEARISH' ? 'bg-red-400' : 'bg-slate-500'
               return (
-                <div key={a.id} style={{
-                  display:     'flex',
-                  alignItems:  'flex-start',
-                  gap:         10,
-                  padding:     '8px 10px',
-                  borderRadius: radius.sm,
-                  background:  colors.pageBg,
-                  border:      `1px solid ${colors.border}`,
-                }}>
-                  <div style={{
-                    width: 8, height: 8, borderRadius: '50%',
-                    background: sentColor,
-                    flexShrink: 0,
-                    marginTop: 5,
-                  }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{
-                      color: colors.text, fontSize: 12, fontWeight: 500,
-                      margin: '0 0 3px',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {a.title}
-                    </p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div key={a.id} className="flex items-start gap-3 bg-white/[0.02] border border-white/[0.04] rounded-xl px-3 py-2.5">
+                  <div className={cn('w-2 h-2 rounded-full mt-1.5 shrink-0', dotCls)} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-slate-200 text-xs font-medium truncate mb-1">{a.title}</p>
+                    <div className="flex items-center gap-1.5">
                       {tickers.map(t => (
-                        <span key={t} style={{
-                          color: colors.brand, fontSize: 10, fontWeight: 700,
-                          padding: '1px 5px', borderRadius: radius.full,
-                          background: `${colors.brand}15`,
-                        }}>{t}</span>
+                        <span key={t} className="text-indigo-400 text-2xs font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded-full">{t}</span>
                       ))}
-                      <span style={{ color: colors.textMuted, fontSize: 10, marginLeft: 'auto' }}>
-                        {a.relativeTime}
-                      </span>
+                      <span className="text-slate-600 text-2xs ml-auto">{a.relativeTime}</span>
                     </div>
                   </div>
                 </div>
@@ -594,122 +391,55 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Performance chart (full width) ─────────────────────────────────── */}
+      {/* Performance Chart */}
       <PerformanceChart hasHoldings={holdings.length > 0} />
 
-      {/* ── Allocation + AI Insights ────────────────────────────────────────── */}
-      <div style={{
-        display:             'grid',
-        gridTemplateColumns: isTablet ? '1fr' : '1fr 1fr',
-        gap:                 16,
-        marginBottom:        8,
-      }}>
+      {/* Allocation + AI Insights */}
+      <div className={cn('grid gap-4 mb-2', isTablet ? 'grid-cols-1' : 'grid-cols-2')}>
         <AllocationChart hasHoldings={holdings.length > 0} />
         <InsightsPanel   hasHoldings={holdings.length > 0} />
       </div>
 
-      {/* ── Connected Accounts ──────────────────────────────────────────────── */}
-      <div style={{
-        display:        'flex',
-        flexDirection:  isMobile ? 'column' : 'row',
-        justifyContent: 'space-between',
-        alignItems:     isMobile ? 'stretch' : 'center',
-        gap:            isMobile ? 10 : 0,
-        marginBottom:   14,
-        marginTop:      8,
-      }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: colors.text, letterSpacing: '-0.3px' }}>
-          Connected Accounts
-        </h2>
+      {/* Connected Accounts */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 mt-6">
+        <h2 className="text-base font-bold text-white tracking-tight">Connected Accounts</h2>
         <ConnectBrokerage onSuccess={handleBrokerageConnected} />
       </div>
 
       {accountsLoading ? (
-        <p style={{ color: colors.textMuted, fontSize: 13 }}>Loading accounts…</p>
+        <div className="flex flex-col gap-2 mb-6">
+          {[1,2].map(i => <div key={i} className="skeleton h-16 rounded-xl" />)}
+        </div>
       ) : accounts.length === 0 ? (
-        <div style={{
-          border:       `1.5px dashed ${colors.border}`,
-          borderRadius: radius.lg,
-          padding:      isMobile ? 24 : 32,
-          textAlign:    'center',
-          marginBottom: 28,
-          background:   colors.surface,
-        }}>
-          <p style={{ color: colors.textSecondary, margin: 0, fontSize: 14 }}>No accounts connected yet.</p>
-          <p style={{ color: colors.textMuted, fontSize: 12, marginTop: 4 }}>
-            Click <strong style={{ color: colors.brand }}>Connect Brokerage</strong> above to link your first account.
+        <div className="border border-dashed border-white/[0.08] rounded-2xl p-8 text-center mb-6 bg-white/[0.01]">
+          <p className="text-slate-400 text-sm mb-1">No accounts connected yet.</p>
+          <p className="text-slate-600 text-xs">
+            Click <span className="text-indigo-400 font-semibold">Connect Brokerage</span> above to link your first account.
           </p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 8, marginBottom: 28 }}>
-          {accounts.map((a) => (
-            <div
-              key={a.accountId}
-              style={{
-                background:    colors.surface,
-                border:        `1px solid ${colors.border}`,
-                borderRadius:  radius.md,
-                padding:       isMobile ? '12px 14px' : '14px 20px',
-                display:       'flex',
-                justifyContent:'space-between',
-                alignItems:    'center',
-                gap:           12,
-                flexWrap:      'wrap',
-                transition:    'box-shadow 0.15s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.boxShadow = shadow.sm)}
-              onMouseLeave={(e) => (e.currentTarget.style.boxShadow = 'none')}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
-                <div style={{
-                  width:          36,
-                  height:         36,
-                  borderRadius:   radius.sm,
-                  background:     colors.brandBg,
-                  display:        'flex',
-                  alignItems:     'center',
-                  justifyContent: 'center',
-                  flexShrink:     0,
-                }}>
-                  <Wallet size={16} color={colors.brand} />
+        <div className="flex flex-col gap-2 mb-6">
+          {accounts.map(a => (
+            <div key={a.accountId}
+              className="glass-sm rounded-xl px-4 py-3.5 flex items-center justify-between gap-3 flex-wrap hover:bg-white/[0.06] transition-colors">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+                  <Wallet size={15} className="text-indigo-400" />
                 </div>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {a.name}
-                  </p>
-                  <p style={{ margin: '2px 0 0', color: colors.textMuted, fontSize: 12 }}>
-                    {a.institutionName} · {a.type}
-                  </p>
+                <div className="min-w-0">
+                  <p className="text-slate-200 text-sm font-semibold truncate">{a.name}</p>
+                  <p className="text-slate-500 text-xs">{a.institutionName} · {a.type}</p>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: isMobile ? 15 : 16, color: colors.text }}>
-                  {fmtUsd(a.balanceCurrent ?? 0)}
-                </p>
+              <div className="flex items-center gap-3 shrink-0">
+                <p className="text-white font-bold text-sm font-nums">{fmtCurrency(a.balanceCurrent ?? 0)}</p>
                 {institutionMap[a.plaidItemId] && (
                   <button
                     onClick={() => handleDisconnect(a.plaidItemId, a.institutionName)}
                     disabled={disconnectingId === a.plaidItemId}
-                    title={`Disconnect ${a.institutionName}`}
-                    style={{
-                      display:     'flex',
-                      alignItems:  'center',
-                      gap:         5,
-                      background:  'none',
-                      border:      `1px solid #fca5a5`,
-                      borderRadius: radius.sm,
-                      padding:     '6px 11px',
-                      fontSize:    12,
-                      cursor:      disconnectingId === a.plaidItemId ? 'wait' : 'pointer',
-                      color:       disconnectingId === a.plaidItemId ? colors.textMuted : colors.danger,
-                      minHeight:   34,
-                      transition:  'background 0.15s',
-                      fontWeight:  500,
-                    }}
-                    onMouseEnter={(e) => { if (disconnectingId !== a.plaidItemId) e.currentTarget.style.background = colors.dangerBg }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
+                    className="flex items-center gap-1.5 text-red-400 hover:bg-red-500/10 border border-red-500/20 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                   >
-                    <Unlink size={12} />
+                    <Unlink size={11} />
                     {disconnectingId === a.plaidItemId ? 'Removing…' : 'Disconnect'}
                   </button>
                 )}
@@ -719,72 +449,43 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Holdings Table ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: colors.text, letterSpacing: '-0.3px' }}>
-          Holdings
-        </h2>
+      {/* Holdings Table */}
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base font-bold text-white tracking-tight">Holdings</h2>
         {holdings.length > 0 && (
-          <span style={{ fontSize: 12, color: colors.textMuted }}>
-            {pricedCount} of {holdings.length} priced
-          </span>
+          <span className="text-slate-500 text-xs">{pricedCount} of {holdings.length} priced</span>
         )}
       </div>
 
       {holdingsLoading ? (
-        <p style={{ color: colors.textMuted, fontSize: 13 }}>Loading holdings…</p>
+        <div className="flex flex-col gap-2">
+          {[1,2,3,4].map(i => <div key={i} className="skeleton h-12 rounded-xl" />)}
+        </div>
       ) : holdings.length === 0 ? (
-        <div style={{
-          border:       `1.5px dashed ${colors.border}`,
-          borderRadius: radius.lg,
-          padding:      isMobile ? 24 : 32,
-          textAlign:    'center',
-          background:   colors.surface,
-          marginBottom: 24,
-        }}>
-          <p style={{ color: colors.textSecondary, margin: 0, fontSize: 14 }}>
-            No holdings found. Connect a brokerage account to see your positions.
-          </p>
+        <div className="border border-dashed border-white/[0.08] rounded-2xl p-8 text-center bg-white/[0.01] mb-6">
+          <p className="text-slate-400 text-sm">No holdings found. Connect a brokerage account to see your positions.</p>
         </div>
       ) : (
-        <div className="table-scroll" style={{ marginBottom: isMobile ? 0 : 32 }}>
-          <table style={{
-            width:           '100%',
-            borderCollapse:  'collapse',
-            minWidth:        isMobile ? 560 : 'auto',
-            background:      colors.surface,
-            borderRadius:    radius.lg,
-            overflow:        'hidden',
-            border:          `1px solid ${colors.border}`,
-            boxShadow:       shadow.sm,
-          }}>
+        <div className="overflow-x-auto rounded-2xl border border-white/[0.06] mb-8">
+          <table className="w-full" style={{ minWidth: isMobile ? 560 : 'auto' }}>
             <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: `1.5px solid ${colors.border}` }}>
-                <th style={thStyle}>TICKER</th>
-                {!isMobile && <th style={thStyle}>NAME</th>}
-                {!isMobile && <th style={thStyle}>ACCOUNT</th>}
-                <th style={{ ...thStyle, textAlign: 'right' }}>PRICE</th>
-                <th
-                  style={{ ...thStyle, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
-                  onClick={() => handleSort('value')}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: sortKey === 'value' ? colors.brand : colors.textMuted }}>
+              <tr className="border-b border-white/[0.06] bg-white/[0.02]">
+                <th className="px-4 py-3 text-left"><span className="label-xs">TICKER</span></th>
+                {!isMobile && <th className="px-3 py-3 text-left"><span className="label-xs">NAME</span></th>}
+                {!isMobile && <th className="px-3 py-3 text-left"><span className="label-xs">ACCOUNT</span></th>}
+                <th className="px-3 py-3 text-right"><span className="label-xs">PRICE</span></th>
+                <th className="px-3 py-3 text-right cursor-pointer select-none" onClick={() => handleSort('value')}>
+                  <span className={cn('label-xs inline-flex items-center gap-1', sortKey === 'value' && 'text-indigo-400')}>
                     VALUE <SortIcon col="value" />
                   </span>
                 </th>
-                <th
-                  style={{ ...thStyle, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
-                  onClick={() => handleSort('gain')}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: sortKey === 'gain' ? colors.brand : colors.textMuted }}>
+                <th className="px-3 py-3 text-right cursor-pointer select-none" onClick={() => handleSort('gain')}>
+                  <span className={cn('label-xs inline-flex items-center gap-1', sortKey === 'gain' && 'text-indigo-400')}>
                     GAIN / LOSS <SortIcon col="gain" />
                   </span>
                 </th>
-                <th
-                  style={{ ...thStyle, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
-                  onClick={() => handleSort('pct')}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: sortKey === 'pct' ? colors.brand : colors.textMuted }}>
+                <th className="px-3 py-3 text-right cursor-pointer select-none" onClick={() => handleSort('pct')}>
+                  <span className={cn('label-xs inline-flex items-center gap-1', sortKey === 'pct' && 'text-indigo-400')}>
                     RETURN % <SortIcon col="pct" />
                   </span>
                 </th>
@@ -792,91 +493,48 @@ export default function DashboardPage() {
             </thead>
             <tbody>
               {sortedHoldings.map((h, idx) => {
-                const gainLoss  = h.unrealizedGainLoss    ?? null
-                const pct       = h.unrealizedGainLossPct ?? null
-                const hasPrice  = h.currentValue != null
-                const positive  = gainLoss != null && gainLoss >= 0
+                const gainLoss = h.unrealizedGainLoss    ?? null
+                const pct      = h.unrealizedGainLossPct ?? null
+                const hasPrice = h.currentValue != null
+                const positive = gainLoss != null && gainLoss >= 0
                 return (
-                  <tr
-                    key={h.positionId}
-                    className="holdings-row"
-                    style={{
-                      borderBottom: idx < sortedHoldings.length - 1 ? `1px solid ${colors.border}` : 'none',
-                    }}
-                  >
-                    {/* Ticker */}
-                    <td style={{ padding: isMobile ? '11px 12px' : '13px 16px' }}>
-                      <span style={{
-                        display:        'inline-block',
-                        background:     colors.brandBg,
-                        color:          colors.brand,
-                        borderRadius:   radius.xs,
-                        padding:        '2px 7px',
-                        fontSize:       isMobile ? 12 : 13,
-                        fontWeight:     700,
-                        fontFamily:     'monospace',
-                        letterSpacing:  '0.3px',
-                      }}>
+                  <tr key={h.positionId}
+                    className={cn('hover:bg-white/[0.02] transition-colors', idx < sortedHoldings.length - 1 && 'border-b border-white/[0.04]')}>
+                    <td className="px-4 py-3">
+                      <span className="bg-indigo-500/10 text-indigo-300 text-xs font-bold font-mono px-2 py-0.5 rounded">
                         {h.ticker}
                       </span>
                     </td>
-
-                    {/* Name */}
                     {!isMobile && (
-                      <td style={{ padding: '13px 12px', color: colors.textSecondary, fontSize: 13, maxWidth: 180 }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
-                          {h.name ?? '—'}
-                        </span>
+                      <td className="px-3 py-3 text-slate-400 text-xs max-w-[160px]">
+                        <span className="truncate block">{h.name ?? '—'}</span>
                       </td>
                     )}
-
-                    {/* Account */}
                     {!isMobile && (
-                      <td style={{ padding: '13px 12px', color: colors.textMuted, fontSize: 12 }}>
-                        {h.accountName}
-                      </td>
+                      <td className="px-3 py-3 text-slate-600 text-xs">{h.accountName}</td>
                     )}
-
-                    {/* Price */}
-                    <td style={{ padding: isMobile ? '11px 10px' : '13px 12px', textAlign: 'right', color: hasPrice ? colors.text : colors.textMuted, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
-                      {h.currentPrice != null
-                        ? fmtUsd(Number(h.currentPrice))
-                        : '—'}
+                    <td className="px-3 py-3 text-right font-nums text-xs text-slate-400">
+                      {h.currentPrice != null ? fmtCurrency(Number(h.currentPrice)) : '—'}
                     </td>
-
-                    {/* Value */}
-                    <td style={{ padding: isMobile ? '11px 10px' : '13px 12px', textAlign: 'right', fontWeight: 600, color: hasPrice ? colors.text : colors.textMuted, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+                    <td className="px-3 py-3 text-right font-nums text-sm font-semibold text-slate-200">
                       {hasPrice
-                        ? fmtUsd(Number(h.currentValue))
-                        : <span style={{ color: colors.textMuted, fontSize: 11, fontStyle: 'italic' }}>Pending</span>}
+                        ? fmtCurrency(Number(h.currentValue))
+                        : <span className="text-slate-600 text-xs italic">Pending</span>}
                     </td>
-
-                    {/* Gain/Loss */}
-                    <td style={{ padding: isMobile ? '11px 10px' : '13px 12px', textAlign: 'right', fontWeight: 500, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+                    <td className="px-3 py-3 text-right font-nums text-sm">
                       {gainLoss != null ? (
-                        <span style={{ color: positive ? colors.success : colors.danger }}>
-                          {gainLoss >= 0 ? '+' : ''}
-                          {fmtUsd(gainLoss)}
+                        <span className={positive ? 'text-emerald-400' : 'text-red-400'}>
+                          {gainLoss >= 0 ? '+' : ''}{fmtCurrency(gainLoss)}
                         </span>
-                      ) : <span style={{ color: colors.textMuted }}>—</span>}
+                      ) : <span className="text-slate-600">—</span>}
                     </td>
-
-                    {/* Return % pill */}
-                    <td style={{ padding: isMobile ? '11px 10px' : '13px 16px', textAlign: 'right' }}>
+                    <td className="px-3 py-3 text-right">
                       {pct != null ? (
-                        <span style={{
-                          display:       'inline-block',
-                          padding:       '3px 8px',
-                          borderRadius:  radius.full,
-                          fontSize:      12,
-                          fontWeight:    700,
-                          background:    positive ? colors.successBg : colors.dangerBg,
-                          color:         positive ? colors.successText : colors.dangerText,
-                          fontVariantNumeric: 'tabular-nums',
-                        }}>
+                        <span className={cn('inline-block px-2 py-0.5 rounded-full text-xs font-bold font-nums',
+                          positive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400')}>
                           {pct >= 0 ? '+' : ''}{Number(pct).toFixed(2)}%
                         </span>
-                      ) : <span style={{ color: colors.textMuted, fontSize: 13 }}>—</span>}
+                      ) : <span className="text-slate-600 text-xs">—</span>}
                     </td>
                   </tr>
                 )
@@ -886,19 +544,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── AI Chat Copilot ─────────────────────────────────────────────────── */}
+      {/* AI Chat Copilot */}
       <ChatPanel hasHoldings={holdings.length > 0} />
     </div>
   )
-}
-
-// ── Table header cell style ────────────────────────────────────────────────────
-const thStyle: React.CSSProperties = {
-  padding:       '10px 12px',
-  fontSize:      11,
-  color:         colors.textMuted,
-  fontWeight:    600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-  whiteSpace:    'nowrap',
 }

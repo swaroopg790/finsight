@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import api from '../lib/api'
 import { useBreakpoint } from '../hooks/useBreakpoint'
-import { colors, radius, shadow, CHART_COLORS } from '../lib/tokens'
 
 interface AllocationItem {
   ticker:    string
@@ -11,9 +10,9 @@ interface AllocationItem {
   weightPct: number
 }
 
-interface Props {
-  hasHoldings: boolean
-}
+interface Props { hasHoldings: boolean }
+
+const CHART_COLORS = ['#6366f1','#8b5cf6','#06b6d4','#10b981','#f59e0b','#ef4444','#f97316','#ec4899']
 
 const fmtUsd = (v: number) =>
   '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -23,7 +22,7 @@ export default function AllocationChart({ hasHoldings }: Props) {
 
   const { data = [], isLoading } = useQuery<AllocationItem[]>({
     queryKey: ['allocation'],
-    queryFn:  () => api.get('/portfolio/allocation').then((r) => r.data),
+    queryFn:  () => api.get('/portfolio/allocation').then(r => r.data),
     enabled:   hasHoldings,
     staleTime: 5 * 60 * 1000,
   })
@@ -35,48 +34,30 @@ export default function AllocationChart({ hasHoldings }: Props) {
     const rest = data.slice(MAX_SLICES - 1)
     chartData  = [
       ...top,
-      {
-        ticker:    'OTHER',
-        name:      'Other',
-        value:     rest.reduce((s, d) => s + d.value, 0),
-        weightPct: rest.reduce((s, d) => s + d.weightPct, 0),
-      },
+      { ticker: 'OTHER', name: 'Other', value: rest.reduce((s, d) => s + d.value, 0), weightPct: rest.reduce((s, d) => s + d.weightPct, 0) },
     ]
   }
 
   const chartHeight = isMobile ? 210 : 230
   const outerRadius = isMobile ? 72  : 84
   const innerRadius = isMobile ? 44  : 54
-  const cyPercent   = isMobile ? '42%' : '44%'
 
   return (
-    <div style={{
-      background:   colors.surface,
-      borderRadius: radius.lg,
-      padding:      isMobile ? 16 : 24,
-      marginBottom: 16,
-      border:       `1px solid ${colors.border}`,
-      boxShadow:    shadow.sm,
-    }}>
-      <p style={{ margin: '0 0 16px', color: colors.textSecondary, fontSize: 12, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-        Asset Allocation
-      </p>
+    <div className="glass rounded-2xl p-4 md:p-6 mb-4">
+      <p className="label-xs mb-4">Asset Allocation</p>
 
       {!hasHoldings ? (
-        <p style={{ color: colors.textMuted, textAlign: 'center', fontSize: 13, margin: '40px 0' }}>
+        <p className="text-slate-500 text-center text-sm my-10">
           Connect a brokerage to see your allocation.
         </p>
       ) : isLoading ? (
-        <div style={{ height: chartHeight, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <p style={{ color: colors.textMuted, fontSize: 13 }}>Loading…</p>
+        <div className="flex items-center justify-center" style={{ height: chartHeight }}>
+          <div className="skeleton w-32 h-5 rounded" />
         </div>
       ) : chartData.length === 0 ? (
-        <div style={{
-          height: chartHeight, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', flexDirection: 'column', gap: 8,
-        }}>
-          <p style={{ color: colors.textSecondary, fontSize: 13, margin: 0 }}>⏳ No priced positions yet</p>
-          <p style={{ color: colors.textMuted, fontSize: 12, margin: 0 }}>Sync prices to see your allocation.</p>
+        <div className="flex flex-col items-center justify-center gap-2" style={{ height: chartHeight }}>
+          <p className="text-slate-400 text-sm">⏳ No priced positions yet</p>
+          <p className="text-slate-600 text-xs">Sync prices to see your allocation.</p>
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={chartHeight}>
@@ -84,7 +65,7 @@ export default function AllocationChart({ hasHoldings }: Props) {
             <Pie
               data={chartData}
               cx="50%"
-              cy={cyPercent}
+              cy="44%"
               innerRadius={innerRadius}
               outerRadius={outerRadius}
               paddingAngle={2}
@@ -102,10 +83,10 @@ export default function AllocationChart({ hasHoldings }: Props) {
                 return [`${fmtUsd(Number(value))} (${item?.weightPct.toFixed(1) ?? ''}%)`, item?.ticker ?? '']
               }}
               contentStyle={{
+                background:   '#0f0f1e',
+                border:       '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 12,
                 fontSize:     12,
-                borderRadius: radius.md,
-                border:       `1px solid ${colors.border}`,
-                boxShadow:    shadow.md,
                 fontFamily:   'inherit',
               }}
             />
@@ -117,7 +98,7 @@ export default function AllocationChart({ hasHoldings }: Props) {
               }}
               iconSize={8}
               iconType="circle"
-              wrapperStyle={{ fontSize: isMobile ? 10 : 11, fontFamily: 'inherit', color: colors.textSecondary }}
+              wrapperStyle={{ fontSize: isMobile ? 10 : 11, fontFamily: 'inherit', color: '#64748b' }}
             />
           </PieChart>
         </ResponsiveContainer>

@@ -1,104 +1,52 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bell, TrendingDown, Mail, CheckCircle, AlertCircle } from 'lucide-react'
-import api                    from '../lib/api'
-import { useBreakpoint }      from '../hooks/useBreakpoint'
-import { colors, radius, shadow } from '../lib/tokens'
+import { motion } from 'framer-motion'
+import { Bell, TrendingDown, Mail, CheckCircle } from 'lucide-react'
+import api from '../lib/api'
+import { cn } from '../lib/utils'
 
 // ── API types ─────────────────────────────────────────────────────────────────
 interface AlertPreference {
-  alertType:         string  // PORTFOLIO_DROP | WEEKLY_SUMMARY
+  alertType:         string
   enabled:           boolean
   thresholdPct:      number | null
   notificationEmail: string | null
 }
-
 interface PutAlertRequest {
   enabled:           boolean
   thresholdPct:      number | null
   notificationEmail: string | null
 }
 
-// ── Default values ────────────────────────────────────────────────────────────
 const DEFAULT_PREFS: AlertPreference[] = [
-  { alertType: 'PORTFOLIO_DROP', enabled: false, thresholdPct: 5, notificationEmail: null },
+  { alertType: 'PORTFOLIO_DROP', enabled: false, thresholdPct: 5,    notificationEmail: null },
   { alertType: 'WEEKLY_SUMMARY', enabled: true,  thresholdPct: null, notificationEmail: null },
 ]
 
-export default function AlertsPage() {
-  const queryClient  = useQueryClient()
-  const { isMobile } = useBreakpoint()
-
-  const { data: serverPrefs = [], isLoading } = useQuery<AlertPreference[]>({
-    queryKey: ['alerts'],
-    queryFn:  () => api.get('/alerts/preferences').then((r) => r.data),
-    staleTime: 30_000,
-  })
-
-  // Merge server prefs with defaults so we always show both card types
-  const prefs: AlertPreference[] = DEFAULT_PREFS.map((def) => {
-    const server = serverPrefs.find((p) => p.alertType === def.alertType)
-    return server ?? def
-  })
-
-  const saveMutation = useMutation({
-    mutationFn: ({ alertType, body }: { alertType: string; body: PutAlertRequest }) =>
-      api.put(`/alerts/preferences/${alertType}`, body).then((r) => r.data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['alerts'] })
-    },
-  })
-
-  const outerPadding = isMobile ? '16px' : '28px 32px'
-
+// ── Toggle Switch ──────────────────────────────────────────────────────────────
+function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: outerPadding }}>
-
-      {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: isMobile ? 18 : 28 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: radius.sm,
-            background: colors.brandBg, display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Bell size={16} color={colors.brand} />
-          </div>
-          <h1 style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, margin: 0, letterSpacing: '-0.5px', color: colors.text }}>
-            Alert Preferences
-          </h1>
-        </div>
-        <p style={{ color: colors.textMuted, margin: 0, fontSize: 13 }}>
-          Stay informed about your portfolio — we'll email you when it matters.
-          {' '}<span style={{ color: colors.brand }}>Dev mode: emails are logged to console.</span>
-        </p>
-      </div>
-
-      {isLoading ? (
-        <p style={{ color: colors.textMuted, fontSize: 13 }}>Loading preferences…</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {prefs.map((pref) => (
-            <AlertCard
-              key={pref.alertType}
-              pref={pref}
-              isMobile={isMobile}
-              isSaving={saveMutation.isPending}
-              onSave={(body) => saveMutation.mutate({ alertType: pref.alertType, body })}
-            />
-          ))}
-        </div>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative inline-flex w-11 h-6 rounded-full transition-colors duration-200 shrink-0',
+        checked ? 'bg-indigo-600' : 'bg-white/[0.08]'
       )}
-    </div>
+    >
+      <span className={cn(
+        'inline-block w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 absolute top-1',
+        checked ? 'translate-x-6' : 'translate-x-1'
+      )} />
+    </button>
   )
 }
 
-// ── Alert card ────────────────────────────────────────────────────────────────
-function AlertCard({
-  pref, isMobile, isSaving, onSave,
-}: {
+// ── Alert Card ────────────────────────────────────────────────────────────────
+function AlertCard({ pref, isSaving, onSave }: {
   pref:     AlertPreference
-  isMobile: boolean
   isSaving: boolean
   onSave:   (body: PutAlertRequest) => void
 }) {
@@ -108,17 +56,15 @@ function AlertCard({
   const [saved,     setSaved]     = useState(false)
   const [emailErr,  setEmailErr]  = useState('')
 
-  // Sync when server data arrives
   useEffect(() => {
     setEnabled(pref.enabled)
     setThreshold(pref.thresholdPct ?? 5)
     setEmail(pref.notificationEmail ?? '')
   }, [pref.enabled, pref.thresholdPct, pref.notificationEmail])
 
-  const isDrop    = pref.alertType === 'PORTFOLIO_DROP'
-
-  const title = isDrop ? 'Portfolio Drop Alert' : 'Weekly Portfolio Summary'
-  const desc  = isDrop
+  const isDrop  = pref.alertType === 'PORTFOLIO_DROP'
+  const title   = isDrop ? 'Portfolio Drop Alert' : 'Weekly Portfolio Summary'
+  const desc    = isDrop
     ? 'Get notified when your portfolio drops by a set percentage within 24 hours.'
     : 'Receive a weekly email summary every Monday with your portfolio performance.'
 
@@ -133,190 +79,144 @@ function AlertCard({
 
   function handleSave() {
     if (!validate()) return
-    onSave({
-      enabled,
-      thresholdPct: isDrop ? threshold : null,
-      notificationEmail: email.trim() || null,
-    })
+    onSave({ enabled, thresholdPct: isDrop ? threshold : null, notificationEmail: email.trim() || null })
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }
 
   return (
-    <div style={{
-      background:   colors.surface,
-      border:       `1px solid ${colors.border}`,
-      borderRadius: radius.lg,
-      padding:      isMobile ? 18 : 24,
-      boxShadow:    shadow.sm,
-      borderLeft:   `3px solid ${enabled ? colors.brand : colors.border}`,
-      transition:   'border-left-color 0.2s',
-    }}>
+    <div className={cn(
+      'glass rounded-2xl p-5 border-l-2 transition-all duration-200',
+      enabled ? 'border-l-indigo-500' : 'border-l-white/[0.06]'
+    )}>
       {/* Card header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: radius.sm,
-            background: enabled ? colors.brandBg : colors.surfaceHover,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0',
+            enabled ? 'bg-indigo-500/10' : 'bg-white/[0.04]')}>
             {isDrop
-              ? <TrendingDown size={16} color={enabled ? colors.brand : colors.textMuted} />
-              : <Mail         size={16} color={enabled ? colors.brand : colors.textMuted} />}
+              ? <TrendingDown size={16} className={enabled ? 'text-indigo-400' : 'text-slate-500'} />
+              : <Mail         size={16} className={enabled ? 'text-indigo-400' : 'text-slate-500'} />}
           </div>
           <div>
-            <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: colors.text }}>{title}</p>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: colors.textMuted }}>{desc}</p>
+            <p className="text-white font-semibold text-sm">{title}</p>
+            <p className="text-slate-500 text-xs mt-0.5">{desc}</p>
           </div>
         </div>
-
-        {/* Toggle switch */}
         <ToggleSwitch checked={enabled} onChange={setEnabled} />
       </div>
 
-      {/* Body — only shown when enabled */}
+      {/* Settings (visible when enabled) */}
       {enabled && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-          {/* Portfolio drop threshold */}
+        <div className="flex flex-col gap-4 pt-3 border-t border-white/[0.04]">
+          {/* Threshold slider */}
           {isDrop && (
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: colors.textSecondary, marginBottom: 8 }}>
-                Alert me when portfolio drops by&ensp;
-                <span style={{ color: colors.brand, fontWeight: 700 }}>{threshold}%</span>
-                &ensp;or more
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={20}
-                  step={0.5}
-                  value={threshold}
-                  onChange={(e) => setThreshold(Number(e.target.value))}
-                  style={{
-                    flex:        1,
-                    accentColor: colors.brand,
-                    cursor:      'pointer',
-                    height:      4,
-                  }}
-                />
-                <span style={{
-                  minWidth:     40,
-                  textAlign:    'right',
-                  fontSize:     14,
-                  fontWeight:   700,
-                  color:        colors.brand,
-                  fontVariantNumeric: 'tabular-nums',
-                }}>
-                  {threshold}%
-                </span>
+              <div className="flex justify-between text-xs mb-2">
+                <span className="text-slate-400">Alert me when portfolio drops by</span>
+                <span className="text-indigo-400 font-bold font-nums">{threshold}%</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: colors.textMuted, marginTop: 4 }}>
-                <span>0.5%</span>
-                <span>10%</span>
-                <span>20%</span>
+              <input
+                type="range" min={0.5} max={20} step={0.5} value={threshold}
+                onChange={e => setThreshold(Number(e.target.value))}
+                className="w-full accent-indigo-600 cursor-pointer h-1"
+              />
+              <div className="flex justify-between text-slate-600 text-2xs mt-1">
+                <span>0.5%</span><span>10%</span><span>20%</span>
               </div>
             </div>
           )}
 
-          {/* Email override */}
+          {/* Email */}
           <div>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: colors.textSecondary, marginBottom: 6 }}>
-              Notification email&ensp;
-              <span style={{ fontSize: 11, fontWeight: 400, color: colors.textMuted }}>(leave blank to use your account email)</span>
-            </label>
+            <label className="label-xs mb-1.5 block">Notification Email</label>
             <input
               type="email"
+              placeholder="your@email.com"
               value={email}
-              onChange={(e) => { setEmail(e.target.value); setEmailErr('') }}
-              placeholder="alerts@example.com"
-              style={{
-                width:        '100%',
-                padding:      '10px 12px',
-                border:       `1px solid ${emailErr ? colors.danger : colors.border}`,
-                borderRadius: radius.sm,
-                fontSize:     14,
-                color:        colors.text,
-                background:   colors.surface,
-                outline:      'none',
-                fontFamily:   'inherit',
-                boxSizing:    'border-box',
-                transition:   'border-color 0.15s',
-              }}
-              onFocus={(e) => { e.target.style.borderColor = colors.brand }}
-              onBlur={(e)  => { e.target.style.borderColor = emailErr ? colors.danger : colors.border }}
+              onChange={e => { setEmail(e.target.value); setEmailErr('') }}
+              className={cn('input-field', emailErr && 'border-red-500/40')}
             />
-            {emailErr && (
-              <p style={{ margin: '4px 0 0', fontSize: 12, color: colors.danger, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <AlertCircle size={12} /> {emailErr}
-              </p>
+            {emailErr && <p className="text-red-400 text-xs mt-1">{emailErr}</p>}
+          </div>
+
+          {/* Save */}
+          <div className="flex items-center justify-end gap-3">
+            {saved && (
+              <span className="flex items-center gap-1.5 text-emerald-400 text-xs">
+                <CheckCircle size={13} /> Saved!
+              </span>
             )}
+            <button onClick={handleSave} disabled={isSaving}
+              className={cn('btn-primary text-xs px-4 py-2', isSaving && 'opacity-70')}>
+              {isSaving ? 'Saving…' : 'Save Changes'}
+            </button>
           </div>
         </div>
       )}
 
-      {/* Footer */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginTop: enabled ? 18 : 0 }}>
-        {saved && (
-          <span style={{ fontSize: 13, color: colors.success, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <CheckCircle size={14} /> Saved
-          </span>
-        )}
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          style={{
-            background:   enabled ? colors.brand : colors.surfaceHover,
-            color:        enabled ? '#fff' : colors.textMuted,
-            border:       'none',
-            borderRadius: radius.sm,
-            padding:      '9px 20px',
-            fontSize:     13,
-            fontWeight:   600,
-            cursor:       isSaving ? 'wait' : 'pointer',
-            transition:   'all 0.15s',
-            minHeight:    38,
-          }}
-        >
-          {isSaving ? 'Saving…' : 'Save'}
-        </button>
-      </div>
+      {/* Disabled state hint */}
+      {!enabled && (
+        <p className="text-slate-600 text-xs mt-1">Enable to configure this alert.</p>
+      )}
     </div>
   )
 }
 
-// ── Toggle switch ─────────────────────────────────────────────────────────────
-function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+// ── Page ──────────────────────────────────────────────────────────────────────
+export default function AlertsPage() {
+  const queryClient = useQueryClient()
+
+  const { data: serverPrefs = [], isLoading } = useQuery<AlertPreference[]>({
+    queryKey:  ['alerts'],
+    queryFn:   () => api.get('/alerts/preferences').then(r => r.data),
+    staleTime: 30_000,
+  })
+
+  const prefs: AlertPreference[] = DEFAULT_PREFS.map(def => {
+    const server = serverPrefs.find(p => p.alertType === def.alertType)
+    return server ?? def
+  })
+
+  const saveMutation = useMutation({
+    mutationFn: ({ alertType, body }: { alertType: string; body: PutAlertRequest }) =>
+      api.put(`/alerts/preferences/${alertType}`, body).then(r => r.data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['alerts'] }) },
+  })
+
   return (
-    <button
-      onClick={() => onChange(!checked)}
-      role="switch"
-      aria-checked={checked}
-      style={{
-        width:        44,
-        height:       24,
-        borderRadius: radius.full,
-        background:   checked ? colors.brand : colors.border,
-        border:       'none',
-        cursor:       'pointer',
-        position:     'relative',
-        flexShrink:   0,
-        transition:   'background 0.2s',
-        padding:      0,
-      }}
-    >
-      <span style={{
-        position:     'absolute',
-        top:          3,
-        left:         checked ? 23 : 3,
-        width:        18,
-        height:       18,
-        borderRadius: radius.full,
-        background:   '#fff',
-        boxShadow:    '0 1px 3px rgba(0,0,0,0.2)',
-        transition:   'left 0.2s',
-      }} />
-    </button>
+    <div className="max-w-2xl mx-auto px-4 py-6 md:px-8 md:py-8">
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-7">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+            <Bell size={15} className="text-indigo-400" />
+          </div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Alert Preferences</h1>
+        </div>
+        <p className="text-slate-500 text-sm ml-11">
+          Stay informed about your portfolio — we'll email you when it matters.{' '}
+          <span className="text-indigo-400">Dev mode: emails are logged to console.</span>
+        </p>
+      </motion.div>
+
+      {isLoading ? (
+        <div className="flex flex-col gap-4">
+          <div className="skeleton h-28 rounded-2xl" />
+          <div className="skeleton h-28 rounded-2xl" />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4 stagger-children">
+          {prefs.map(pref => (
+            <AlertCard
+              key={pref.alertType}
+              pref={pref}
+              isSaving={saveMutation.isPending}
+              onSave={body => saveMutation.mutate({ alertType: pref.alertType, body })}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

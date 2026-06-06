@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
 import {
   Newspaper, Sparkles, TrendingUp, TrendingDown, Minus,
   RefreshCw, ExternalLink, Calendar, Clock, AlertCircle,
 } from 'lucide-react'
-import { useBreakpoint } from '../hooks/useBreakpoint'
 import api from '../lib/api'
-import { colors, radius, shadow } from '../lib/tokens'
+import { cn } from '../lib/utils'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -55,30 +55,25 @@ interface PortfolioNewsResponse {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function sentimentColor(s: 'BULLISH' | 'BEARISH' | 'NEUTRAL') {
-  if (s === 'BULLISH') return { text: '#10b981', bg: 'rgba(16,185,129,0.1)' }
-  if (s === 'BEARISH') return { text: '#ef4444', bg: 'rgba(239,68,68,0.1)' }
-  return { text: '#94a3b8', bg: 'rgba(148,163,184,0.1)' }
+type Sentiment = 'BULLISH' | 'BEARISH' | 'NEUTRAL'
+
+function sentimentClasses(s: Sentiment) {
+  if (s === 'BULLISH') return { text: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' }
+  if (s === 'BEARISH') return { text: 'text-red-400',     bg: 'bg-red-500/10',     border: 'border-red-500/30'     }
+  return                       { text: 'text-slate-400',  bg: 'bg-slate-500/10',   border: 'border-slate-500/20'   }
 }
 
-function SentimentBadge({ sentiment }: { sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' }) {
-  const { text, bg } = sentimentColor(sentiment)
+// ── Sentiment Badge ───────────────────────────────────────────────────────────
+
+function SentimentBadge({ sentiment }: { sentiment: Sentiment }) {
+  const cls  = sentimentClasses(sentiment)
   const Icon = sentiment === 'BULLISH' ? TrendingUp : sentiment === 'BEARISH' ? TrendingDown : Minus
   return (
-    <span style={{
-      display:     'inline-flex',
-      alignItems:  'center',
-      gap:         3,
-      padding:     '2px 7px',
-      borderRadius: radius.full,
-      background:  bg,
-      color:       text,
-      fontSize:    10,
-      fontWeight:  600,
-      letterSpacing: '0.5px',
-      textTransform: 'uppercase' as const,
-    }}>
-      <Icon size={10} />
+    <span className={cn(
+      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide',
+      cls.text, cls.bg
+    )}>
+      <Icon size={9} />
       {sentiment}
     </span>
   )
@@ -91,36 +86,20 @@ function SentimentStrip({ sentimentByTicker }: { sentimentByTicker: Record<strin
   if (entries.length === 0) return null
 
   return (
-    <div style={{
-      background:   colors.surface,
-      borderRadius: radius.md,
-      border:       `1px solid ${colors.border}`,
-      padding:      '14px 18px',
-      boxShadow:    shadow.sm,
-    }}>
-      <p style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.6px',
-                  textTransform: 'uppercase', margin: '0 0 12px' }}>
-        Analyst Sentiment · Your Holdings
-      </p>
-      <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 8 }}>
+    <div className="glass rounded-2xl p-4">
+      <p className="label-xs mb-3">Analyst Sentiment · Your Holdings</p>
+      <div className="flex flex-wrap gap-2">
         {entries.map(s => {
-          const { text, bg } = sentimentColor(s.label)
+          const cls = sentimentClasses(s.label)
           return (
-            <div key={s.ticker} title={s.topHeadline} style={{
-              display:      'flex',
-              alignItems:   'center',
-              gap:          6,
-              padding:      '6px 10px',
-              borderRadius: radius.sm,
-              background:   bg,
-              border:       `1px solid ${text}30`,
-              cursor:       'default',
-            }}>
-              <span style={{ color: colors.text, fontWeight: 700, fontSize: 13 }}>{s.ticker}</span>
-              <span style={{ color: text, fontSize: 11, fontWeight: 600 }}>{s.label}</span>
-              <span style={{ color: colors.textMuted, fontSize: 10 }}>
-                {s.articleCount} art.
-              </span>
+            <div key={s.ticker} title={s.topHeadline}
+              className={cn(
+                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs cursor-default',
+                cls.bg, cls.border
+              )}>
+              <span className="text-slate-100 font-bold">{s.ticker}</span>
+              <span className={cn('font-semibold', cls.text)}>{s.label}</span>
+              <span className="text-slate-500">{s.articleCount} art.</span>
             </div>
           )
         })}
@@ -135,58 +114,34 @@ function EarningsCalendar({ earnings }: { earnings: EarningsEvent[] }) {
   if (earnings.length === 0) return null
 
   return (
-    <div style={{
-      background:   colors.surface,
-      borderRadius: radius.md,
-      border:       `1px solid ${colors.border}`,
-      padding:      '14px 18px',
-      boxShadow:    shadow.sm,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <Calendar size={14} color={colors.brand} />
-        <p style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.6px',
-                    textTransform: 'uppercase', margin: 0 }}>
-          Upcoming Earnings · Your Holdings
-        </p>
+    <div className="glass rounded-2xl p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Calendar size={14} className="text-indigo-400" />
+        <p className="label-xs">Upcoming Earnings · Your Holdings</p>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
+      <div className="flex flex-col gap-2">
         {earnings.slice(0, 5).map(e => (
-          <div key={e.ticker} style={{
-            display:        'flex',
-            alignItems:     'center',
-            justifyContent: 'space-between',
-            padding:        '8px 12px',
-            borderRadius:   radius.sm,
-            background:     colors.pageBg,
-            border:         `1px solid ${colors.border}`,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{
-                fontWeight:   700, fontSize: 13, color: colors.brand,
-                minWidth:     44,
-              }}>
-                {e.ticker}
-              </span>
-              <span style={{ color: colors.text, fontSize: 13, fontWeight: 500 }}>
+          <div key={e.ticker}
+            className="flex items-center justify-between px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+            <div className="flex items-center gap-2.5">
+              <span className="text-indigo-400 font-bold text-sm min-w-[44px]">{e.ticker}</span>
+              <span className="text-slate-200 text-sm font-medium">
                 {e.companyName.length > 28 ? e.companyName.slice(0, 25) + '…' : e.companyName}
               </span>
-              <span style={{ color: colors.textMuted, fontSize: 11 }}>{e.quarter}</span>
+              <span className="text-slate-500 text-xs">{e.quarter}</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ color: colors.text, fontSize: 12 }}>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-300 text-xs">
                 {new Date(e.reportDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </span>
-              <span style={{
-                padding:      '2px 8px',
-                borderRadius: radius.full,
-                background:   e.daysUntil <= 7 ? 'rgba(251,191,36,0.15)' : 'rgba(148,163,184,0.1)',
-                color:        e.daysUntil <= 7 ? '#f59e0b' : colors.textMuted,
-                fontSize:     10, fontWeight: 600,
-              }}>
+              <span className={cn(
+                'px-2 py-0.5 rounded-full text-[10px] font-bold',
+                e.daysUntil <= 7 ? 'bg-amber-500/15 text-amber-400' : 'bg-slate-500/10 text-slate-500'
+              )}>
                 {e.daysUntil === 0 ? 'Today' : `${e.daysUntil}d`}
               </span>
               {e.estimated && (
-                <span style={{ color: colors.textMuted, fontSize: 9 }} title="Estimated date">~est.</span>
+                <span className="text-slate-600 text-[9px]" title="Estimated date">~est.</span>
               )}
             </div>
           </div>
@@ -213,43 +168,27 @@ function AiSummaryCard({ summary, generatedAt, stale }: {
   })()
 
   return (
-    <div style={{
-      background:   'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e3a5f 100%)',
-      borderRadius: radius.lg,
-      padding:      '20px 22px',
-      boxShadow:    shadow.md,
-      border:       '1px solid rgba(99,102,241,0.3)',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-                    gap: 12, marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: radius.sm,
-            background: 'rgba(99,102,241,0.3)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Sparkles size={14} color="#a5b4fc" />
+    <div className="rounded-2xl p-5 border border-indigo-500/30"
+      style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e3a5f 100%)' }}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-indigo-500/30 flex items-center justify-center">
+            <Sparkles size={13} className="text-indigo-300" />
           </div>
           <div>
-            <p style={{ color: '#a5b4fc', fontSize: 11, fontWeight: 700,
-                        letterSpacing: '0.6px', textTransform: 'uppercase' as const, margin: 0 }}>
+            <p className="text-indigo-300 text-[11px] font-bold uppercase tracking-widest">
               AI Portfolio Impact
             </p>
-            <p style={{ color: 'rgba(165,180,252,0.5)', fontSize: 10, margin: 0 }}>
-              What today's news means for YOU
-            </p>
+            <p className="text-indigo-400/50 text-[10px]">What today's news means for YOU</p>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4,
-                      color: 'rgba(165,180,252,0.5)', fontSize: 10 }}>
+        <div className="flex items-center gap-1 text-indigo-400/50 text-[10px] shrink-0">
           <Clock size={10} />
           {time}
-          {stale && <span style={{ color: '#f59e0b', marginLeft: 4 }}>· stale</span>}
+          {stale && <span className="text-amber-400 ml-1">· stale</span>}
         </div>
       </div>
-      <p style={{ color: '#e0e7ff', fontSize: 14, lineHeight: 1.65, margin: 0, fontStyle: 'italic' }}>
-        "{summary}"
-      </p>
+      <p className="text-indigo-100 text-sm leading-relaxed italic">"{summary}"</p>
     </div>
   )
 }
@@ -257,92 +196,50 @@ function AiSummaryCard({ summary, generatedAt, stale }: {
 // ── News Article Card ─────────────────────────────────────────────────────────
 
 function ArticleCard({ article }: { article: NewsArticle }) {
-  const { text: sentColor } = sentimentColor(article.sentiment)
+  const sentCls = sentimentClasses(article.sentiment)
 
   return (
-    <div style={{
-      background:   colors.surface,
-      borderRadius: radius.md,
-      border:       `1px solid ${colors.border}`,
-      padding:      '14px 16px',
-      boxShadow:    shadow.sm,
-      display:      'flex',
-      flexDirection: 'column' as const,
-      gap:           8,
-    }}>
-      {/* Ticker tags + sentiment */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const }}>
+    <div className="glass rounded-xl p-4 flex flex-col gap-2.5 hover:bg-white/[0.04] transition-colors">
+      {/* Ticker tags + sentiment + time */}
+      <div className="flex items-center gap-1.5 flex-wrap">
         {(article.relevantTickers.length > 0
             ? article.relevantTickers
             : article.tickers
         ).slice(0, 4).map(t => (
-          <span key={t} style={{
-            padding:      '2px 8px',
-            borderRadius: radius.full,
-            background:   `${colors.brand}18`,
-            color:        colors.brand,
-            fontSize:     10,
-            fontWeight:   700,
-          }}>
+          <span key={t}
+            className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 text-[10px] font-bold">
             {t}
           </span>
         ))}
         <SentimentBadge sentiment={article.sentiment} />
-        <span style={{ marginLeft: 'auto', color: colors.textMuted, fontSize: 11 }}>
-          {article.relativeTime}
-        </span>
+        <span className="ml-auto text-slate-500 text-xs">{article.relativeTime}</span>
       </div>
 
       {/* Title */}
-      <p style={{
-        color: colors.text, fontSize: 14, fontWeight: 600, margin: 0,
-        lineHeight: 1.4,
-      }}>
-        {article.title}
-      </p>
+      <p className="text-slate-100 text-sm font-semibold leading-snug">{article.title}</p>
 
       {/* Description */}
       {article.description && (
-        <p style={{
-          color: colors.textMuted, fontSize: 13, margin: 0, lineHeight: 1.5,
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical' as const,
-          overflow: 'hidden',
-        } as React.CSSProperties}>
+        <p className="text-slate-500 text-xs leading-relaxed line-clamp-2">
           {article.description}
         </p>
       )}
 
       {/* Sentiment reasoning */}
       {article.sentimentReasoning && (
-        <p style={{
-          color: sentColor, fontSize: 11, margin: 0, fontStyle: 'italic',
-          display: '-webkit-box',
-          WebkitLineClamp: 1,
-          WebkitBoxOrient: 'vertical' as const,
-          overflow: 'hidden',
-        } as React.CSSProperties}>
+        <p className={cn('text-[11px] italic line-clamp-1', sentCls.text)}>
           {article.sentimentReasoning}
         </p>
       )}
 
       {/* Footer */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ color: colors.textMuted, fontSize: 11 }}>{article.publisher}</span>
+      <div className="flex items-center justify-between pt-0.5">
+        <span className="text-slate-500 text-xs">{article.publisher}</span>
         <a
           href={article.articleUrl}
           target="_blank"
           rel="noopener noreferrer"
-          style={{
-            display:    'flex',
-            alignItems: 'center',
-            gap:        4,
-            color:      colors.brand,
-            fontSize:   11,
-            fontWeight: 600,
-            textDecoration: 'none',
-          }}
+          className="flex items-center gap-1 text-indigo-400 text-xs font-semibold hover:text-indigo-300 transition-colors"
         >
           Read <ExternalLink size={10} />
         </a>
@@ -355,16 +252,10 @@ function ArticleCard({ article }: { article: NewsArticle }) {
 
 function EmptyState() {
   return (
-    <div style={{
-      textAlign:    'center',
-      padding:      '60px 20px',
-      color:        colors.textMuted,
-    }}>
-      <Newspaper size={48} color={colors.border} style={{ marginBottom: 16 }} />
-      <p style={{ fontSize: 16, fontWeight: 600, color: colors.text, margin: '0 0 8px' }}>
-        No holdings yet
-      </p>
-      <p style={{ fontSize: 14, margin: 0 }}>
+    <div className="text-center py-16">
+      <Newspaper size={48} className="text-white/[0.06] mx-auto mb-4" />
+      <p className="text-white text-base font-semibold mb-2">No holdings yet</p>
+      <p className="text-slate-500 text-sm">
         Connect a brokerage account to see news filtered to your portfolio.
       </p>
     </div>
@@ -374,14 +265,13 @@ function EmptyState() {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function NewsPage() {
-  const { isMobile } = useBreakpoint()
   const qc = useQueryClient()
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'BULLISH' | 'BEARISH' | 'NEUTRAL'>('ALL')
 
   const { data, isLoading, isError } = useQuery<PortfolioNewsResponse>({
     queryKey: ['news-feed'],
     queryFn:  () => api.get('/api/v1/news/feed').then(r => r.data),
-    staleTime: 10 * 60 * 1000,  // 10 min
+    staleTime: 10 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
   })
 
@@ -392,29 +282,19 @@ export default function NewsPage() {
     },
   })
 
-  const PAD = isMobile ? '16px' : '32px 40px'
-
   if (isLoading) return (
-    <div style={{ padding: PAD, display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-8 flex flex-col gap-3">
       {[...Array(5)].map((_, i) => (
-        <div key={i} style={{
-          height: 100, borderRadius: radius.md,
-          background: colors.surface, border: `1px solid ${colors.border}`,
-          animation: 'pulse 1.5s ease-in-out infinite',
-        }} />
+        <div key={i} className="skeleton h-24 rounded-2xl" />
       ))}
     </div>
   )
 
   if (isError) return (
-    <div style={{ padding: PAD }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, padding: '16px 20px',
-        background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
-        borderRadius: radius.md, color: '#ef4444',
-      }}>
-        <AlertCircle size={16} />
-        <span>Failed to load news. Please try again.</span>
+    <div className="max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-8">
+      <div className="flex items-center gap-2.5 px-4 py-3.5 glass rounded-xl border-l-2 border-l-red-500">
+        <AlertCircle size={16} className="text-red-400 shrink-0" />
+        <span className="text-red-400 text-sm">Failed to load news. Please try again.</span>
       </div>
     </div>
   )
@@ -422,64 +302,42 @@ export default function NewsPage() {
   const articles = (data?.articles ?? []).filter(
     a => activeFilter === 'ALL' || a.sentiment === activeFilter
   )
-
   const holdingsCount = data?.topHoldings.length ?? 0
 
   return (
-    <div style={{ padding: PAD, maxWidth: 820, margin: '0 auto' }}>
-
-      {/* ── Header ────────────────────────────────────────────────────── */}
-      <div style={{
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'space-between',
-        marginBottom:   24,
-        flexWrap:       'wrap',
-        gap:            12,
-      }}>
+    <div className="max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-8">
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+        className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <Newspaper size={22} color={colors.brand} />
-            <h1 style={{ color: colors.text, fontSize: isMobile ? 20 : 24,
-                         fontWeight: 700, margin: 0 }}>
-              Portfolio News
-            </h1>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+              <Newspaper size={15} className="text-indigo-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Portfolio News</h1>
           </div>
-          <p style={{ color: colors.textMuted, fontSize: 13, margin: 0 }}>
+          <p className="text-slate-500 text-sm ml-11">
             {holdingsCount > 0
               ? `Filtered to your ${holdingsCount} holding${holdingsCount === 1 ? '' : 's'} · not Bloomberg's generic feed`
               : 'Connect a brokerage account to filter by your holdings'}
           </p>
         </div>
-
         <button
           onClick={() => refresh()}
           disabled={refreshing}
-          style={{
-            display:     'flex',
-            alignItems:  'center',
-            gap:         6,
-            padding:     '8px 14px',
-            borderRadius: radius.sm,
-            border:      `1px solid ${colors.border}`,
-            background:  colors.surface,
-            color:       colors.text,
-            fontSize:    13, fontWeight: 500,
-            cursor:      refreshing ? 'not-allowed' : 'pointer',
-            opacity:     refreshing ? 0.6 : 1,
-          }}
+          className={cn('btn-ghost flex items-center gap-1.5 text-sm px-3 py-2', refreshing && 'opacity-60 cursor-not-allowed')}
         >
-          <RefreshCw size={13} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+          <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
           {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
-      </div>
+      </motion.div>
 
       {holdingsCount === 0 && !isLoading ? (
         <EmptyState />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div className="flex flex-col gap-4">
 
-          {/* ── AI Summary ──────────────────────────────────────────────── */}
+          {/* AI Summary */}
           {data?.aiSummary && (
             <AiSummaryCard
               summary={data.aiSummary}
@@ -488,41 +346,41 @@ export default function NewsPage() {
             />
           )}
 
-          {/* ── Sentiment Strip ─────────────────────────────────────────── */}
+          {/* Sentiment Strip */}
           {data?.sentimentByTicker && Object.keys(data.sentimentByTicker).length > 0 && (
             <SentimentStrip sentimentByTicker={data.sentimentByTicker} />
           )}
 
-          {/* ── Earnings Calendar ───────────────────────────────────────── */}
+          {/* Earnings Calendar */}
           {data?.earnings && data.earnings.length > 0 && (
             <EarningsCalendar earnings={data.earnings} />
           )}
 
-          {/* ── Filter tabs ─────────────────────────────────────────────── */}
+          {/* Filter tabs */}
           {data && data.articles.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="flex items-center gap-1.5 flex-wrap">
               {(['ALL', 'BULLISH', 'BEARISH', 'NEUTRAL'] as const).map(f => {
                 const active = activeFilter === f
-                const { text, bg } = f === 'ALL'
-                  ? { text: colors.brand, bg: `${colors.brand}15` }
-                  : sentimentColor(f as any)
+                const cls = f === 'ALL'
+                  ? { text: 'text-indigo-400', activeBg: 'bg-indigo-500/10', activeBorder: 'border-indigo-500/50' }
+                  : (() => {
+                      const s = sentimentClasses(f)
+                      return { text: s.text, activeBg: s.bg, activeBorder: s.border }
+                    })()
                 return (
                   <button
                     key={f}
                     onClick={() => setActiveFilter(f)}
-                    style={{
-                      padding:     '5px 12px',
-                      borderRadius: radius.full,
-                      border:      `1px solid ${active ? text : colors.border}`,
-                      background:  active ? bg : 'transparent',
-                      color:       active ? text : colors.textMuted,
-                      fontSize:    12, fontWeight: 500,
-                      cursor:      'pointer',
-                    }}
+                    className={cn(
+                      'px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150',
+                      active
+                        ? cn(cls.text, cls.activeBg, cls.activeBorder)
+                        : 'text-slate-500 border-white/[0.08] hover:text-slate-300'
+                    )}
                   >
                     {f}
                     {f !== 'ALL' && (
-                      <span style={{ marginLeft: 4, opacity: 0.7 }}>
+                      <span className="ml-1 opacity-70">
                         ({data.articles.filter(a => a.sentiment === f).length})
                       </span>
                     )}
@@ -530,27 +388,24 @@ export default function NewsPage() {
                 )
               })}
               {activeFilter === 'ALL' && (
-                <span style={{ marginLeft: 'auto', color: colors.textMuted, fontSize: 12 }}>
-                  {data.articles.length} articles
-                </span>
+                <span className="ml-auto text-slate-500 text-xs">{data.articles.length} articles</span>
               )}
             </div>
           )}
 
-          {/* ── Articles ────────────────────────────────────────────────── */}
+          {/* Articles */}
           {articles.length === 0 ? (
-            <p style={{ color: colors.textMuted, fontSize: 14, textAlign: 'center', padding: 32 }}>
+            <p className="text-slate-500 text-sm text-center py-8">
               No {activeFilter !== 'ALL' ? activeFilter.toLowerCase() + ' ' : ''}articles today.
             </p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="flex flex-col gap-2.5">
               {articles.map(a => <ArticleCard key={a.id} article={a} />)}
             </div>
           )}
 
-          {/* ── Footer note ─────────────────────────────────────────────── */}
-          <p style={{ color: colors.textMuted, fontSize: 11, textAlign: 'center',
-                      padding: '8px 0 24px', margin: 0 }}>
+          {/* Footer note */}
+          <p className="text-slate-600 text-xs text-center py-4">
             News sourced from Polygon.io · AI analysis powered by Groq · Updates every 15 minutes
           </p>
         </div>

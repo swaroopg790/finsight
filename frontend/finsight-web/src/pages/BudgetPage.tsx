@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
 import {
   Wallet, TrendingUp, TrendingDown, ChevronLeft, ChevronRight,
   RefreshCw, RotateCcw, Check, Calendar, CreditCard, Repeat,
@@ -7,7 +8,7 @@ import {
 } from 'lucide-react'
 import api               from '../lib/api'
 import { useBreakpoint } from '../hooks/useBreakpoint'
-import { colors, radius, shadow } from '../lib/tokens'
+import { cn }            from '../lib/utils'
 
 // ── API types ─────────────────────────────────────────────────────────────────
 
@@ -47,11 +48,11 @@ interface SubscriptionItem {
 
 interface CashFlowEvent {
   date:          string
-  type:          string   // "BILL" | "INCOME" | "ACTUAL"
+  type:          string
   description:   string
   category:      string
   categoryEmoji: string
-  amount:        number   // negative = expense, positive = income
+  amount:        number
   predicted:     boolean
 }
 
@@ -84,7 +85,7 @@ const fmtMonthLabel = (year: number, month: number) =>
   new Date(year, month - 1, 1)
     .toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
-// ── Spending category bar colours ─────────────────────────────────────────────
+// ── Category bar colour classes ───────────────────────────────────────────────
 const CAT_COLOR: Record<string, string> = {
   GROCERIES:     '#16a34a',
   DINING:        '#f59e0b',
@@ -100,48 +101,26 @@ const CAT_COLOR: Record<string, string> = {
 }
 const catColor = (cat: string) => CAT_COLOR[cat] ?? '#94a3b8'
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Stat Card ─────────────────────────────────────────────────────────────────
 
 function StatCard({
-  label, value, sub, icon, accent, negative,
+  label, value, sub, icon, accentClass, negative,
 }: {
   label: string; value: string; sub?: string
-  icon: ReactNode; accent: string; negative?: boolean
+  icon: ReactNode; accentClass: string; negative?: boolean
 }) {
   return (
-    <div style={{
-      background: colors.surface,
-      borderRadius: radius.lg,
-      border: `1px solid ${colors.border}`,
-      padding: '18px 20px',
-      boxShadow: shadow.sm,
-      display: 'flex',
-      alignItems: 'center',
-      gap: 14,
-      minWidth: 0,
-    }}>
-      <div style={{
-        width: 42, height: 42, borderRadius: radius.md,
-        background: accent + '18',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0,
-      }}>
+    <div className="glass rounded-2xl p-4 flex items-center gap-3 min-w-0">
+      <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', accentClass)}>
         {icon}
       </div>
-      <div style={{ minWidth: 0 }}>
-        <p style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600,
-          letterSpacing: '0.6px', textTransform: 'uppercase', margin: '0 0 3px' }}>
-          {label}
-        </p>
-        <p style={{
-          color: negative ? colors.danger : colors.text,
-          fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: '-0.5px',
-        }}>
+      <div className="min-w-0">
+        <p className="label-xs mb-1">{label}</p>
+        <p className={cn('text-xl font-bold font-nums tracking-tight leading-none',
+          negative ? 'text-red-400' : 'text-slate-100')}>
           {value}
         </p>
-        {sub && (
-          <p style={{ color: colors.textMuted, fontSize: 11, margin: '2px 0 0' }}>{sub}</p>
-        )}
+        {sub && <p className="text-slate-500 text-xs mt-0.5">{sub}</p>}
       </div>
     </div>
   )
@@ -159,33 +138,17 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
     { key: 'cashflow',      label: 'Cash Flow',     icon: <Calendar size={14} /> },
   ]
   return (
-    <div style={{
-      display: 'flex',
-      background: colors.surface,
-      borderRadius: radius.lg,
-      border: `1px solid ${colors.border}`,
-      padding: 4,
-      gap: 2,
-      overflowX: 'auto',
-    }}>
+    <div className="glass rounded-xl p-1 flex gap-1 overflow-x-auto">
       {tabs.map(t => (
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
-          style={{
-            flex: 1,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            padding: '8px 14px',
-            borderRadius: radius.md,
-            border: 'none',
-            cursor: 'pointer',
-            background: active === t.key ? colors.brand : 'transparent',
-            color: active === t.key ? '#fff' : colors.textMuted,
-            fontSize: 13,
-            fontWeight: active === t.key ? 600 : 400,
-            whiteSpace: 'nowrap',
-            transition: 'background 0.15s, color 0.15s',
-          }}
+          className={cn(
+            'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 whitespace-nowrap',
+            active === t.key
+              ? 'bg-indigo-600 text-white font-semibold'
+              : 'text-slate-500 hover:text-slate-300'
+          )}
         >
           {t.icon}
           {t.label}
@@ -198,50 +161,36 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
 // ── Category progress bar ─────────────────────────────────────────────────────
 
 function CategoryBar({ item }: { item: CategorySpendingItem }) {
-  const color   = catColor(item.category)
+  const color    = catColor(item.category)
   const hasBudget = item.budget > 0
-  const pct     = hasBudget ? Math.min(item.budgetUsedPct, 100) : 0
-  const over    = hasBudget && item.budgetUsedPct > 100
+  const pct      = hasBudget ? Math.min(item.budgetUsedPct, 100) : 0
+  const over     = hasBudget && item.budgetUsedPct > 100
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-          <span style={{ fontSize: 16 }}>{item.emoji}</span>
-          <span style={{ color: colors.text, fontSize: 13, fontWeight: 500,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {item.label}
-          </span>
-          <span style={{ color: colors.textMuted, fontSize: 11 }}>
-            ({item.transactionCount} txns)
-          </span>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-base">{item.emoji}</span>
+          <span className="text-slate-200 text-sm font-medium truncate">{item.label}</span>
+          <span className="text-slate-600 text-xs shrink-0">({item.transactionCount} txns)</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div className="flex items-center gap-2 shrink-0">
           {hasBudget && (
-            <span style={{
-              fontSize: 11, fontWeight: 600, color: over ? colors.danger : colors.textMuted,
-            }}>
+            <span className={cn('text-xs font-semibold', over ? 'text-red-400' : 'text-slate-500')}>
               {Math.round(item.budgetUsedPct)}% of {fmtUsd(item.budget, true)}
             </span>
           )}
-          <span style={{ color: colors.text, fontSize: 14, fontWeight: 600 }}>
+          <span className="text-slate-200 text-sm font-bold font-nums">
             {fmtUsd(item.actual, true)}
           </span>
         </div>
       </div>
       {hasBudget && (
-        <div style={{
-          height: 6, borderRadius: 3,
-          background: colors.border,
-          overflow: 'hidden',
-        }}>
-          <div style={{
-            height: '100%',
-            width: pct + '%',
-            background: over ? colors.danger : color,
-            borderRadius: 3,
-            transition: 'width 0.4s ease',
-          }} />
+        <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${pct}%`, background: over ? '#ef4444' : color }}
+          />
         </div>
       )}
     </div>
@@ -255,27 +204,16 @@ function OverviewTab({ data }: { data: BudgetSummaryResponse | undefined }) {
   const topCats = data.categories.slice(0, 10)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Spending breakdown */}
-      <div style={{
-        background: colors.surface,
-        borderRadius: radius.lg,
-        border: `1px solid ${colors.border}`,
-        padding: '20px 24px',
-        boxShadow: shadow.sm,
-      }}>
-        <h3 style={{ color: colors.text, fontSize: 15, fontWeight: 700, margin: '0 0 18px', letterSpacing: '-0.3px' }}>
-          Spending by Category
-        </h3>
+    <div className="flex flex-col gap-4">
+      <div className="glass rounded-2xl p-5">
+        <h3 className="text-white font-bold text-sm mb-4 tracking-tight">Spending by Category</h3>
         {topCats.length === 0 ? (
-          <p style={{ color: colors.textMuted, fontSize: 14, margin: 0 }}>
+          <p className="text-slate-500 text-sm">
             No bank transactions found yet. Sync your accounts to see spending data.
           </p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {topCats.map(cat => (
-              <CategoryBar key={cat.category} item={cat} />
-            ))}
+          <div className="flex flex-col gap-4">
+            {topCats.map(cat => <CategoryBar key={cat.category} item={cat} />)}
           </div>
         )}
       </div>
@@ -297,14 +235,14 @@ const DEFAULT_BUDGETS: Record<string, number> = {
 }
 
 const ALL_CATEGORIES = [
-  { key: 'GROCERIES',     label: 'Groceries',        emoji: '🛒' },
-  { key: 'DINING',        label: 'Dining & Coffee',  emoji: '🍽️' },
-  { key: 'SUBSCRIPTIONS', label: 'Subscriptions',    emoji: '📱' },
+  { key: 'GROCERIES',     label: 'Groceries',         emoji: '🛒' },
+  { key: 'DINING',        label: 'Dining & Coffee',   emoji: '🍽️' },
+  { key: 'SUBSCRIPTIONS', label: 'Subscriptions',     emoji: '📱' },
   { key: 'UTILITIES',     label: 'Utilities & Bills', emoji: '⚡' },
-  { key: 'TRANSPORT',     label: 'Transport',         emoji: '🚗' },
-  { key: 'SHOPPING',      label: 'Shopping',          emoji: '🛍️' },
-  { key: 'HEALTHCARE',    label: 'Healthcare',        emoji: '🏥' },
-  { key: 'ENTERTAINMENT', label: 'Entertainment',     emoji: '🎬' },
+  { key: 'TRANSPORT',     label: 'Transport',          emoji: '🚗' },
+  { key: 'SHOPPING',      label: 'Shopping',           emoji: '🛍️' },
+  { key: 'HEALTHCARE',    label: 'Healthcare',         emoji: '🏥' },
+  { key: 'ENTERTAINMENT', label: 'Entertainment',      emoji: '🎬' },
 ]
 
 function BudgetsTab({
@@ -337,34 +275,22 @@ function BudgetsTab({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{
-        background: colors.surface,
-        borderRadius: radius.lg,
-        border: `1px solid ${colors.border}`,
-        padding: '20px 24px',
-        boxShadow: shadow.sm,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h3 style={{ color: colors.text, fontSize: 15, fontWeight: 700, margin: 0, letterSpacing: '-0.3px' }}>
-            Monthly Budget Targets
-          </h3>
+    <div className="flex flex-col gap-4">
+      <div className="glass rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-white font-bold text-sm tracking-tight">Monthly Budget Targets</h3>
           <button
             onClick={handleSave}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '8px 18px',
-              background: saved ? colors.success : colors.brand,
-              color: '#fff', border: 'none', borderRadius: radius.md,
-              fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              transition: 'background 0.2s',
-            }}
+            className={cn(
+              'flex items-center gap-1.5 btn-primary text-xs px-4 py-2',
+              saved && 'bg-emerald-600 hover:bg-emerald-500'
+            )}
           >
-            {saved ? <><Check size={14} /> Saved!</> : <>Save Budgets</>}
+            {saved ? <><Check size={13} /> Saved!</> : 'Save Budgets'}
           </button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="flex flex-col gap-4">
           {ALL_CATEGORIES.map(cat => {
             const actual = actualMap[cat.key] ?? 0
             const budget = localBudgets[cat.key] ?? 0
@@ -373,16 +299,12 @@ function BudgetsTab({
             const color  = catColor(cat.key)
 
             return (
-              <div key={cat.key} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {/* Row: emoji + label + input + actual */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 18, flexShrink: 0 }}>{cat.emoji}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ color: colors.text, fontSize: 13, fontWeight: 500 }}>{cat.label}</span>
-                  </div>
-                  {/* Budget input */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                    <span style={{ color: colors.textMuted, fontSize: 13 }}>$</span>
+              <div key={cat.key} className="flex flex-col gap-2">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-lg shrink-0">{cat.emoji}</span>
+                  <span className="text-slate-200 text-sm font-medium flex-1 min-w-0 truncate">{cat.label}</span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-slate-500 text-sm">$</span>
                     <input
                       type="number"
                       min={0}
@@ -391,38 +313,25 @@ function BudgetsTab({
                       onChange={e => setLocalBudgets(prev => ({
                         ...prev, [cat.key]: parseFloat(e.target.value) || 0,
                       }))}
-                      style={{
-                        width: 80, padding: '5px 8px',
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: radius.sm,
-                        background: colors.pageBg,
-                        color: colors.text,
-                        fontSize: 13, fontWeight: 600,
-                        textAlign: 'right',
-                        outline: 'none',
-                      }}
+                      className="w-20 px-2 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-slate-200 text-xs font-bold font-nums text-right focus:outline-none focus:border-indigo-500/50"
                     />
-                    <span style={{ color: colors.textMuted, fontSize: 11, whiteSpace: 'nowrap' }}>/mo</span>
+                    <span className="text-slate-600 text-xs whitespace-nowrap">/mo</span>
                   </div>
-                  {/* Actual */}
                   {actual > 0 && (
-                    <span style={{
-                      color: over ? colors.danger : colors.textSecondary,
-                      fontSize: 12, fontWeight: 600, flexShrink: 0, width: 80, textAlign: 'right',
-                    }}>
+                    <span className={cn(
+                      'text-xs font-semibold shrink-0 w-20 text-right font-nums',
+                      over ? 'text-red-400' : 'text-slate-400'
+                    )}>
                       {fmtUsd(actual, true)} spent
                     </span>
                   )}
                 </div>
-
-                {/* Progress bar */}
                 {budget > 0 && (
-                  <div style={{ height: 5, borderRadius: 3, background: colors.border, overflow: 'hidden' }}>
-                    <div style={{
-                      height: '100%', width: pct + '%',
-                      background: over ? colors.danger : color,
-                      borderRadius: 3, transition: 'width 0.4s ease',
-                    }} />
+                  <div className="h-1 rounded-full bg-white/[0.06] overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%`, background: over ? '#ef4444' : color }}
+                    />
                   </div>
                 )}
               </div>
@@ -443,22 +352,15 @@ function SubscriptionsTab({ data }: { data: CashFlowSummaryResponse | undefined 
   const totalAnnual  = subs.reduce((sum, s) => sum + s.annualCost, 0)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Summary banner */}
+    <div className="flex flex-col gap-4">
       {subs.length > 0 && (
-        <div style={{
-          background: `${colors.brand}12`,
-          border: `1px solid ${colors.brand}30`,
-          borderRadius: radius.lg,
-          padding: '16px 20px',
-          display: 'flex', alignItems: 'center', gap: 14,
-        }}>
-          <AlertCircle size={20} color={colors.brand} />
+        <div className="glass rounded-2xl p-4 flex items-center gap-3 border-l-2 border-l-indigo-500">
+          <AlertCircle size={20} className="text-indigo-400 shrink-0" />
           <div>
-            <p style={{ color: colors.text, fontSize: 14, fontWeight: 600, margin: '0 0 3px' }}>
+            <p className="text-white text-sm font-semibold mb-0.5">
               You're paying {fmtUsd(totalMonthly, true)}/month in recurring charges
             </p>
-            <p style={{ color: colors.textMuted, fontSize: 12, margin: 0 }}>
+            <p className="text-slate-500 text-xs">
               {fmtUsd(totalAnnual, true)}/year across {subs.length} detected subscriptions and bills
             </p>
           </div>
@@ -466,54 +368,39 @@ function SubscriptionsTab({ data }: { data: CashFlowSummaryResponse | undefined 
       )}
 
       {subs.length === 0 ? (
-        <div style={{
-          background: colors.surface, borderRadius: radius.lg,
-          border: `1px solid ${colors.border}`,
-          padding: '32px 24px', textAlign: 'center',
-        }}>
-          <Repeat size={32} color={colors.textMuted} style={{ marginBottom: 12 }} />
-          <p style={{ color: colors.textMuted, fontSize: 14, margin: 0 }}>
+        <div className="glass rounded-2xl p-10 text-center">
+          <Repeat size={32} className="text-slate-700 mx-auto mb-3" />
+          <p className="text-slate-500 text-sm">
             No recurring charges detected yet. Sync more transaction history to detect subscriptions.
           </p>
         </div>
       ) : (
-        <div style={{
-          background: colors.surface, borderRadius: radius.lg,
-          border: `1px solid ${colors.border}`,
-          overflow: 'hidden', boxShadow: shadow.sm,
-        }}>
+        <div className="glass rounded-2xl overflow-hidden">
           {subs.map((sub, idx) => (
             <div
               key={sub.merchantName + idx}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 14,
-                padding: '14px 20px',
-                borderBottom: idx < subs.length - 1 ? `1px solid ${colors.border}` : 'none',
-              }}
+              className={cn(
+                'flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-white/[0.02]',
+                idx < subs.length - 1 && 'border-b border-white/[0.04]'
+              )}
             >
-              {/* Emoji + name */}
-              <div style={{
-                width: 38, height: 38, borderRadius: radius.sm,
-                background: catColor(sub.category) + '18',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 18, flexShrink: 0,
-              }}>
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0"
+                style={{ background: catColor(sub.category) + '18' }}
+              >
                 {sub.categoryEmoji}
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ color: colors.text, fontSize: 14, fontWeight: 600,
-                  margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {sub.merchantName}
-                </p>
-                <p style={{ color: colors.textMuted, fontSize: 11, margin: 0 }}>
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm font-semibold truncate">{sub.merchantName}</p>
+                <p className="text-slate-500 text-xs">
                   {sub.categoryLabel} · {sub.frequency} · {sub.occurrences}× detected
                 </p>
               </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <p style={{ color: colors.text, fontSize: 14, fontWeight: 700, margin: '0 0 2px' }}>
+              <div className="text-right shrink-0">
+                <p className="text-white text-sm font-bold font-nums">
                   {fmtUsd(sub.typicalAmount, true)}/{sub.frequency === 'Monthly' ? 'mo' : sub.frequency === 'Weekly' ? 'wk' : 'biweekly'}
                 </p>
-                <p style={{ color: colors.textMuted, fontSize: 11, margin: 0 }}>
+                <p className="text-slate-500 text-xs">
                   Next: {sub.nextExpectedDate ? fmtDate(sub.nextExpectedDate) : '—'}
                 </p>
               </div>
@@ -529,49 +416,33 @@ function SubscriptionsTab({ data }: { data: CashFlowSummaryResponse | undefined 
 
 function CashFlowTab({ data }: { data: CashFlowSummaryResponse | undefined }) {
   if (!data) return null
-  const events = data.calendarEvents
-  const today  = new Date().toISOString().split('T')[0]
-
+  const events  = data.calendarEvents
+  const today   = new Date().toISOString().split('T')[0]
   const upcoming = events.filter(e => e.date >= today).slice(0, 20)
   const recent   = events.filter(e => e.date < today).slice(0, 10)
-
   const balDelta = data.projectedBalance30Days - data.currentBalance
   const balUp    = balDelta >= 0
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="flex flex-col gap-4">
       {/* Balance cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div style={{
-          background: colors.surface, borderRadius: radius.lg,
-          border: `1px solid ${colors.border}`, padding: '18px 20px',
-          boxShadow: shadow.sm,
-        }}>
-          <p style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600,
-            letterSpacing: '0.6px', textTransform: 'uppercase', margin: '0 0 6px' }}>
-            Current Balance
-          </p>
-          <p style={{ color: colors.text, fontSize: 22, fontWeight: 700, margin: 0 }}>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="glass rounded-2xl p-4">
+          <p className="label-xs mb-1.5">Current Balance</p>
+          <p className="text-slate-100 text-xl font-bold font-nums tracking-tight">
             {fmtUsd(data.currentBalance, true)}
           </p>
-          <p style={{ color: colors.textMuted, fontSize: 11, margin: '4px 0 0' }}>
-            Checking + Savings
-          </p>
+          <p className="text-slate-500 text-xs mt-1">Checking + Savings</p>
         </div>
-        <div style={{
-          background: colors.surface, borderRadius: radius.lg,
-          border: `1px solid ${balUp ? colors.success : colors.danger}40`,
-          padding: '18px 20px',
-          boxShadow: shadow.sm,
-        }}>
-          <p style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600,
-            letterSpacing: '0.6px', textTransform: 'uppercase', margin: '0 0 6px' }}>
-            Projected (30 days)
-          </p>
-          <p style={{ color: balUp ? colors.success : colors.danger, fontSize: 22, fontWeight: 700, margin: 0 }}>
+        <div className={cn('glass rounded-2xl p-4 border',
+          balUp ? 'border-emerald-500/20' : 'border-red-500/20')}>
+          <p className="label-xs mb-1.5">Projected (30 days)</p>
+          <p className={cn('text-xl font-bold font-nums tracking-tight',
+            balUp ? 'text-emerald-400' : 'text-red-400')}>
             {fmtUsd(data.projectedBalance30Days, true)}
           </p>
-          <p style={{ color: balUp ? colors.success : colors.danger, fontSize: 11, margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 3 }}>
+          <p className={cn('text-xs mt-1 flex items-center gap-1',
+            balUp ? 'text-emerald-400' : 'text-red-400')}>
             {balUp ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
             {balUp ? '+' : ''}{fmtUsd(balDelta, false)} projected
           </p>
@@ -580,47 +451,34 @@ function CashFlowTab({ data }: { data: CashFlowSummaryResponse | undefined }) {
 
       {/* Upcoming events */}
       {upcoming.length > 0 && (
-        <div style={{
-          background: colors.surface, borderRadius: radius.lg,
-          border: `1px solid ${colors.border}`,
-          overflow: 'hidden', boxShadow: shadow.sm,
-        }}>
-          <div style={{ padding: '16px 20px 12px', borderBottom: `1px solid ${colors.border}` }}>
-            <h3 style={{ color: colors.text, fontSize: 14, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
-              <Calendar size={15} color={colors.brand} /> Upcoming (next 30 days)
-            </h3>
+        <div className="glass rounded-2xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-white/[0.04] flex items-center gap-2">
+            <Calendar size={14} className="text-indigo-400" />
+            <h3 className="text-white text-sm font-bold">Upcoming (next 30 days)</h3>
           </div>
           {upcoming.map((ev, idx) => {
             const isIncome = ev.amount > 0
             return (
-              <div key={idx} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '12px 20px',
-                borderBottom: idx < upcoming.length - 1 ? `1px solid ${colors.border}` : 'none',
-                background: ev.predicted ? 'transparent' : undefined,
-              }}>
-                <div style={{ flexShrink: 0, width: 38, textAlign: 'center' }}>
-                  <span style={{ fontSize: 16 }}>{ev.categoryEmoji}</span>
+              <div key={idx} className={cn(
+                'flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors',
+                idx < upcoming.length - 1 && 'border-b border-white/[0.04]'
+              )}>
+                <div className="w-9 text-center shrink-0">
+                  <span className="text-base">{ev.categoryEmoji}</span>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ color: colors.text, fontSize: 13, fontWeight: 500,
-                    margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-slate-200 text-sm font-medium truncate">
                     {ev.description}
                     {ev.predicted && (
-                      <span style={{ marginLeft: 6, fontSize: 10, color: colors.textMuted,
-                        background: colors.border, borderRadius: 4, padding: '1px 5px' }}>
+                      <span className="ml-2 text-xs text-slate-600 bg-white/[0.04] rounded px-1.5 py-0.5">
                         predicted
                       </span>
                     )}
                   </p>
-                  <p style={{ color: colors.textMuted, fontSize: 11, margin: 0 }}>
-                    {fmtDate(ev.date)}
-                  </p>
+                  <p className="text-slate-500 text-xs">{fmtDate(ev.date)}</p>
                 </div>
-                <span style={{
-                  color: isIncome ? colors.success : colors.text,
-                  fontSize: 14, fontWeight: 700, flexShrink: 0,
-                }}>
+                <span className={cn('text-sm font-bold font-nums shrink-0',
+                  isIncome ? 'text-emerald-400' : 'text-slate-200')}>
                   {isIncome ? '+' : '−'}{fmtUsd(ev.amount, true)}
                 </span>
               </div>
@@ -631,40 +489,27 @@ function CashFlowTab({ data }: { data: CashFlowSummaryResponse | undefined }) {
 
       {/* Recent actuals */}
       {recent.length > 0 && (
-        <div style={{
-          background: colors.surface, borderRadius: radius.lg,
-          border: `1px solid ${colors.border}`,
-          overflow: 'hidden', boxShadow: shadow.sm,
-        }}>
-          <div style={{ padding: '16px 20px 12px', borderBottom: `1px solid ${colors.border}` }}>
-            <h3 style={{ color: colors.text, fontSize: 14, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
-              <RotateCcw size={15} color={colors.textMuted} /> Recent (last 30 days)
-            </h3>
+        <div className="glass rounded-2xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-white/[0.04] flex items-center gap-2">
+            <RotateCcw size={14} className="text-slate-500" />
+            <h3 className="text-white text-sm font-bold">Recent (last 30 days)</h3>
           </div>
           {recent.map((ev, idx) => {
             const isIncome = ev.amount > 0
             return (
-              <div key={idx} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '12px 20px',
-                borderBottom: idx < recent.length - 1 ? `1px solid ${colors.border}` : 'none',
-              }}>
-                <div style={{ flexShrink: 0, width: 38, textAlign: 'center' }}>
-                  <span style={{ fontSize: 16 }}>{ev.categoryEmoji}</span>
+              <div key={idx} className={cn(
+                'flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors',
+                idx < recent.length - 1 && 'border-b border-white/[0.04]'
+              )}>
+                <div className="w-9 text-center shrink-0">
+                  <span className="text-base">{ev.categoryEmoji}</span>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ color: colors.text, fontSize: 13, fontWeight: 500,
-                    margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {ev.description}
-                  </p>
-                  <p style={{ color: colors.textMuted, fontSize: 11, margin: 0 }}>
-                    {fmtDate(ev.date)}
-                  </p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-slate-200 text-sm font-medium truncate">{ev.description}</p>
+                  <p className="text-slate-500 text-xs">{fmtDate(ev.date)}</p>
                 </div>
-                <span style={{
-                  color: isIncome ? colors.success : colors.textSecondary,
-                  fontSize: 14, fontWeight: 600, flexShrink: 0,
-                }}>
+                <span className={cn('text-sm font-semibold font-nums shrink-0',
+                  isIncome ? 'text-emerald-400' : 'text-slate-400')}>
                   {isIncome ? '+' : '−'}{fmtUsd(ev.amount, true)}
                 </span>
               </div>
@@ -674,12 +519,9 @@ function CashFlowTab({ data }: { data: CashFlowSummaryResponse | undefined }) {
       )}
 
       {upcoming.length === 0 && recent.length === 0 && (
-        <div style={{
-          background: colors.surface, borderRadius: radius.lg,
-          border: `1px solid ${colors.border}`, padding: '32px 24px', textAlign: 'center',
-        }}>
-          <Calendar size={32} color={colors.textMuted} style={{ marginBottom: 12 }} />
-          <p style={{ color: colors.textMuted, fontSize: 14, margin: 0 }}>
+        <div className="glass rounded-2xl p-10 text-center">
+          <Calendar size={32} className="text-slate-700 mx-auto mb-3" />
+          <p className="text-slate-500 text-sm">
             No calendar events yet. Sync bank transactions to see upcoming bills and income.
           </p>
         </div>
@@ -695,11 +537,9 @@ export default function BudgetPage() {
   const queryClient    = useQueryClient()
   const [tab, setTab]  = useState<Tab>('overview')
 
-  // Month picker state (default to current month)
   const now = new Date()
   const [year,  setYear]  = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
-
   const [syncing, setSyncing] = useState(false)
 
   const budgetQuery = useQuery<BudgetSummaryResponse>({
@@ -731,7 +571,6 @@ export default function BudgetPage() {
     },
   })
 
-  // Month navigation
   const prevMonth = () => {
     if (month === 1) { setYear(y => y - 1); setMonth(12) }
     else setMonth(m => m - 1)
@@ -747,169 +586,118 @@ export default function BudgetPage() {
   const budget = budgetQuery.data
   const cf     = cashflowQuery.data
 
-  // Build summary stats
-  const totalSpent    = budget?.totalSpent  ?? 0
-  const totalIncome   = budget?.totalIncome ?? 0
-  const netCashFlow   = budget?.netCashFlow ?? 0
+  const totalSpent    = budget?.totalSpent    ?? 0
+  const totalIncome   = budget?.totalIncome   ?? 0
+  const netCashFlow   = budget?.netCashFlow   ?? 0
   const totalBudgeted = budget?.totalBudgeted ?? 0
 
-  const pad = isMobile ? '16px' : '28px 32px'
-
   return (
-    <div style={{ padding: pad, maxWidth: 900, margin: '0 auto' }}>
-      {/* ── Header ────────────────────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex', alignItems: isMobile ? 'flex-start' : 'center',
-        justifyContent: 'space-between',
-        flexDirection: isMobile ? 'column' : 'row',
-        gap: 12, marginBottom: 24,
-      }}>
+    <div className="max-w-4xl mx-auto px-4 py-6 md:px-8 md:py-8">
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+        className={cn('flex gap-4 mb-6',
+          isMobile ? 'flex-col' : 'flex-row items-center justify-between')}>
         <div>
-          <h1 style={{
-            color: colors.text, fontSize: isMobile ? 20 : 24,
-            fontWeight: 800, margin: 0, letterSpacing: '-0.5px',
-            display: 'flex', alignItems: 'center', gap: 10,
-          }}>
-            <Wallet size={isMobile ? 20 : 24} color={colors.brand} />
-            Budgeting &amp; Cash Flow
-          </h1>
-          <p style={{ color: colors.textMuted, fontSize: 13, margin: '4px 0 0' }}>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+              <Wallet size={15} className="text-indigo-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Budgeting &amp; Cash Flow</h1>
+          </div>
+          <p className="text-slate-500 text-sm ml-11">
             Bank accounts, spending categories, subscriptions &amp; calendar
           </p>
         </div>
-
-        {/* Sync button */}
         <button
           onClick={() => syncMutation.mutate()}
           disabled={syncing}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-            padding: '8px 16px', borderRadius: radius.md,
-            background: syncing ? colors.border : colors.brand,
-            color: syncing ? colors.textMuted : '#fff',
-            border: 'none', cursor: syncing ? 'not-allowed' : 'pointer',
-            fontSize: 13, fontWeight: 600, transition: 'background 0.15s',
-          }}
+          className={cn('btn-primary shrink-0', syncing && 'opacity-70 cursor-wait')}
         >
-          <RefreshCw size={14} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
+          <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
           {syncing ? 'Syncing…' : 'Sync Now'}
         </button>
-      </div>
+      </motion.div>
 
-      {/* ── Month picker (overview + budgets tabs only) ────────────────────── */}
+      {/* Month picker */}
       {(tab === 'overview' || tab === 'budgets') && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          marginBottom: 16,
-        }}>
-          <button
-            onClick={prevMonth}
-            style={{
-              background: colors.surface, border: `1px solid ${colors.border}`,
-              borderRadius: radius.sm, padding: '6px 10px', cursor: 'pointer',
-              color: colors.text, display: 'flex', alignItems: 'center',
-            }}
-          >
+        <div className="flex items-center gap-2 mb-4">
+          <button onClick={prevMonth}
+            className="btn-ghost p-2 rounded-lg">
             <ChevronLeft size={16} />
           </button>
-          <span style={{
-            color: colors.text, fontSize: 14, fontWeight: 700,
-            minWidth: 130, textAlign: 'center', letterSpacing: '-0.3px',
-          }}>
+          <span className="text-white text-sm font-bold min-w-[140px] text-center tracking-tight">
             {fmtMonthLabel(year, month)}
           </span>
-          <button
-            onClick={nextMonth}
-            disabled={isCurrentMonth}
-            style={{
-              background: colors.surface, border: `1px solid ${colors.border}`,
-              borderRadius: radius.sm, padding: '6px 10px',
-              cursor: isCurrentMonth ? 'not-allowed' : 'pointer',
-              color: isCurrentMonth ? colors.textMuted : colors.text,
-              display: 'flex', alignItems: 'center', opacity: isCurrentMonth ? 0.5 : 1,
-            }}
-          >
+          <button onClick={nextMonth} disabled={isCurrentMonth}
+            className={cn('btn-ghost p-2 rounded-lg', isCurrentMonth && 'opacity-40 cursor-not-allowed')}>
             <ChevronRight size={16} />
           </button>
         </div>
       )}
 
-      {/* ── Summary stat cards (overview only) ───────────────────────────── */}
+      {/* Summary stat cards (overview only) */}
       {tab === 'overview' && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
-          gap: 12,
-          marginBottom: 20,
-        }}>
+        <div className={cn('grid gap-3 mb-5',
+          isMobile ? 'grid-cols-2' : 'grid-cols-4')}>
           <StatCard
             label="Total Spent"
             value={fmtUsd(totalSpent, true)}
             sub={`${budget?.categories.length ?? 0} categories`}
-            icon={<TrendingDown size={18} color={colors.danger} />}
-            accent={colors.danger}
+            icon={<TrendingDown size={17} className="text-red-400" />}
+            accentClass="bg-red-500/10"
           />
           <StatCard
             label="Total Income"
             value={fmtUsd(totalIncome, true)}
-            icon={<TrendingUp size={18} color={colors.success} />}
-            accent={colors.success}
+            icon={<TrendingUp size={17} className="text-emerald-400" />}
+            accentClass="bg-emerald-500/10"
           />
           <StatCard
             label="Net Cash Flow"
             value={fmtUsd(netCashFlow)}
             sub={netCashFlow >= 0 ? 'surplus' : 'deficit'}
-            icon={<DollarSign size={18} color={netCashFlow >= 0 ? colors.success : colors.danger} />}
-            accent={netCashFlow >= 0 ? colors.success : colors.danger}
+            icon={<DollarSign size={17} className={netCashFlow >= 0 ? 'text-emerald-400' : 'text-red-400'} />}
+            accentClass={netCashFlow >= 0 ? 'bg-emerald-500/10' : 'bg-red-500/10'}
             negative={netCashFlow < 0}
           />
           <StatCard
             label="Budgeted"
             value={fmtUsd(totalBudgeted, true)}
             sub={totalBudgeted > 0 ? `${Math.round((totalSpent / totalBudgeted) * 100)}% used` : 'Not set'}
-            icon={<CreditCard size={18} color={colors.brand} />}
-            accent={colors.brand}
+            icon={<CreditCard size={17} className="text-indigo-400" />}
+            accentClass="bg-indigo-500/10"
           />
         </div>
       )}
 
-      {/* ── Loading / error state ─────────────────────────────────────────── */}
+      {/* Loading / error */}
       {budgetQuery.isLoading && (
-        <p style={{ color: colors.textMuted, fontSize: 14 }}>Loading spending data…</p>
+        <div className="flex flex-col gap-3 mb-5">
+          <div className="skeleton h-20 rounded-2xl" />
+          <div className="skeleton h-20 rounded-2xl" />
+        </div>
       )}
       {budgetQuery.isError && (
-        <div style={{
-          background: colors.dangerBg, border: `1px solid ${colors.danger}30`,
-          borderRadius: radius.md, padding: '14px 18px', marginBottom: 16,
-        }}>
-          <p style={{ color: colors.dangerText, fontSize: 14, margin: 0 }}>
+        <div className="glass rounded-xl px-4 py-3 mb-4 flex items-center gap-2 border-l-2 border-l-red-500">
+          <AlertCircle size={15} className="text-red-400 shrink-0" />
+          <p className="text-red-400 text-sm">
             Failed to load budget data. Make sure your bank accounts are connected and synced.
           </p>
         </div>
       )}
 
-      {/* ── Tab bar ───────────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: 20 }}>
+      {/* Tab bar */}
+      <div className="mb-4">
         <TabBar active={tab} onChange={setTab} />
       </div>
 
-      {/* ── Tab content ───────────────────────────────────────────────────── */}
+      {/* Tab content */}
       {tab === 'overview'      && <OverviewTab data={budget} />}
       {tab === 'budgets'       && (
-        <BudgetsTab
-          data={budget}
-          onSave={targets =>
-            saveBudgetsMutation.mutate(targets)
-          }
-        />
+        <BudgetsTab data={budget} onSave={targets => saveBudgetsMutation.mutate(targets)} />
       )}
       {tab === 'subscriptions' && <SubscriptionsTab data={cf} />}
       {tab === 'cashflow'      && <CashFlowTab data={cf} />}
-
-      {/* CSS for spin animation */}
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
     </div>
   )
 }

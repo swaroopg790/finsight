@@ -1,172 +1,154 @@
-/* ── CSS Custom Properties ─────────────────────────────────────────────── */
-:root {
-  /* Brand (unchanged between themes) */
-  --brand:        #4f46e5;
-  --brand-light:  #818cf8;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-  /* Theme-sensitive semantic colours */
-  --color-brand-bg:       #eef2ff;
-  --color-brand-border:   #c7d2fe;
-  --color-page-bg:        #f8fafc;
-  --color-surface:        #ffffff;
-  --color-surface-hover:  #f8fafc;
-  --color-text:           #0f172a;
-  --color-text-secondary: #475569;
-  --color-text-muted:     #94a3b8;
-  --color-border:         #e2e8f0;
-  --color-border-hover:   #cbd5e1;
-  --color-success-bg:     #dcfce7;
-  --color-danger-bg:      #fee2e2;
-  --color-warning-bg:     #fef3c7;
+/* ── Google Fonts ─────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap');
 
-  /* Legacy aliases kept for body/focus-visible usage */
-  --page-bg:      var(--color-page-bg);
-  --surface:      var(--color-surface);
-  --text:         var(--color-text);
-  --text-sec:     var(--color-text-secondary);
-  --text-muted:   var(--color-text-muted);
-  --border:       var(--color-border);
-  --success:      #16a34a;
-  --danger:       #dc2626;
-  --warning:      #d97706;
+/* ── Base layer ───────────────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  * { margin: 0; }
 
-  --radius-sm:    6px;
-  --radius-md:    10px;
-  --radius-lg:    14px;
-  --shadow-sm:    0 1px 4px rgba(0,0,0,0.08);
-  --shadow-md:    0 4px 16px rgba(0,0,0,0.08);
-  --shadow-lg:    0 8px 32px rgba(0,0,0,0.12);
-  --transition:   0.15s ease;
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #050510;
+    color: #f1f5f9;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+  }
+
+  button, a { -webkit-tap-highlight-color: transparent; }
+  a { color: inherit; text-decoration: none; }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.1);
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
 }
 
-/* ── Dark theme overrides ───────────────────────────────────────────────── */
-[data-theme="dark"] {
-  --color-brand-bg:       #1e1b4b;
-  --color-brand-border:   #3730a3;
-  --color-page-bg:        #0f172a;
-  --color-surface:        #1e293b;
-  --color-surface-hover:  #263044;
-  --color-text:           #f1f5f9;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted:     #64748b;
-  --color-border:         #334155;
-  --color-border-hover:   #475569;
-  --color-success-bg:     #14532d;
-  --color-danger-bg:      #7f1d1d;
-  --color-warning-bg:     #78350f;
+/* ── Components ───────────────────────────────────────────────────────────── */
+@layer components {
+
+  /* Glass card */
+  .glass {
+    @apply bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] rounded-2xl;
+  }
+  .glass-sm {
+    @apply bg-white/[0.04] backdrop-blur-md border border-white/[0.06] rounded-xl;
+  }
+  .glass-hover {
+    @apply transition-all duration-150 hover:bg-white/[0.06] hover:border-white/[0.12] hover:shadow-lift;
+  }
+
+  /* Gradient accent button */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2
+           bg-indigo-600 hover:bg-indigo-500
+           text-white font-semibold text-sm
+           px-5 py-2.5 rounded-xl
+           transition-all duration-150
+           active:scale-[0.97] active:opacity-90
+           shadow-glow-sm;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2
+           bg-white/[0.04] hover:bg-white/[0.08]
+           border border-white/[0.08]
+           text-slate-300 hover:text-slate-100
+           font-medium text-sm
+           px-4 py-2 rounded-xl
+           transition-all duration-150;
+  }
+
+  /* Stat badge (delta pill) */
+  .delta-positive {
+    @apply inline-flex items-center gap-1
+           bg-emerald-500/10 text-emerald-400
+           text-xs font-semibold px-2 py-0.5 rounded-full;
+  }
+  .delta-negative {
+    @apply inline-flex items-center gap-1
+           bg-red-500/10 text-red-400
+           text-xs font-semibold px-2 py-0.5 rounded-full;
+  }
+  .delta-neutral {
+    @apply inline-flex items-center gap-1
+           bg-slate-500/10 text-slate-400
+           text-xs font-semibold px-2 py-0.5 rounded-full;
+  }
+
+  /* Skeleton shimmer */
+  .skeleton {
+    @apply rounded-lg bg-gradient-to-r
+           from-white/[0.04] via-white/[0.08] to-white/[0.04]
+           bg-[length:200%_100%] animate-shimmer;
+  }
+
+  /* Section label */
+  .label-xs {
+    @apply text-2xs font-semibold tracking-widest uppercase text-slate-500;
+  }
+
+  /* Input field */
+  .input-field {
+    @apply w-full bg-white/[0.06] border border-white/[0.10]
+           text-slate-100 placeholder:text-slate-600
+           text-sm rounded-xl px-4 py-3
+           focus:outline-none focus:border-indigo-500
+           transition-colors duration-150;
+  }
+
+  /* Nav item (sidebar) */
+  .nav-link {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl
+           text-slate-400 hover:text-slate-200 hover:bg-white/[0.05]
+           font-medium text-sm transition-all duration-150 cursor-pointer
+           border border-transparent;
+  }
+  .nav-link.active {
+    @apply text-indigo-300 bg-indigo-500/10 border-indigo-500/20 shadow-glow-sm;
+  }
 }
 
-/* ── Reset ─────────────────────────────────────────────────────────────── */
-*, *::before, *::after {
-  box-sizing: border-box;
-}
+/* ── Utilities ─────────────────────────────────────────────────────────────── */
+@layer utilities {
+  .font-nums { font-variant-numeric: tabular-nums; }
+  .text-display { font-family: 'Instrument Serif', Georgia, serif; }
+  .bg-base { background: #050510; }
+  .border-dim { border-color: rgba(255,255,255,0.08); }
 
-* {
-  margin: 0;
-}
+  /* Noise texture overlay for depth */
+  .noise::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    border-radius: inherit;
+    pointer-events: none;
+  }
 
-/* ── Base ──────────────────────────────────────────────────────────────── */
-html {
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-}
-
-body {
-  font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background: var(--page-bg);
-  color: var(--text);
-  line-height: 1.5;
-
-  /* Prevent iOS text-size inflation in landscape */
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-}
-
-/* ── Interactive elements ──────────────────────────────────────────────── */
-button, a, input, textarea, select {
-  -webkit-tap-highlight-color: transparent;
-}
-
-input, textarea, select {
-  max-width: 100%;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-/* ── Focus visible — accessible keyboard navigation ───────────────────── */
-:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
-}
-
-/* ── Scrollable table containers (mobile) ─────────────────────────────── */
-.table-scroll {
-  width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  border-radius: var(--radius-lg);
-}
-
-/* ── Custom scrollbar (WebKit) ────────────────────────────────────────── */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-/* ── Skeleton shimmer animation ───────────────────────────────────────── */
-@keyframes shimmer {
-  0%   { background-position:  200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-/* ── Fade-in animation ────────────────────────────────────────────────── */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.fade-in {
-  animation: fadeIn 0.25s ease both;
-}
-
-/* ── Pulse animation (typing dots) ─────────────────────────────────────── */
-@keyframes pulse {
-  0%, 100% { opacity: 1;   transform: scale(1); }
-  50%       { opacity: 0.4; transform: scale(0.85); }
-}
-
-/* ── Spin animation (loading/sync icons) ───────────────────────────────── */
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-
-/* ── Holdings table row hover (cannot be done with inline styles) ──────── */
-.holdings-row:hover {
-  background: var(--color-surface-hover) !important;
-}
-
-/* ── Dark mode: transaction table row hover ─────────────────────────────── */
-.txn-row:hover {
-  background: var(--color-surface-hover) !important;
-}
-
-/* ── Nav item active/hover transitions ────────────────────────────────── */
-.nav-item {
-  transition: background var(--transition), color var(--transition);
+  .stagger-children > * { animation: fadeUp 0.28s ease-out both; }
+  .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-children > *:nth-child(2) { animation-delay: 60ms; }
+  .stagger-children > *:nth-child(3) { animation-delay: 120ms; }
+  .stagger-children > *:nth-child(4) { animation-delay: 180ms; }
+  .stagger-children > *:nth-child(5) { animation-delay: 240ms; }
+  .stagger-children > *:nth-child(6) { animation-delay: 300ms; }
 }
