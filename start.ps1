@@ -1,16 +1,16 @@
-# FinSight — start all services
-# Usage: right-click → "Run with PowerShell"  OR  tell Claude "start the app"
+# FinSight - start all services
+# Usage: right-click -> "Run with PowerShell"  OR  tell Claude "start the app"
 
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
             [System.Environment]::GetEnvironmentVariable("Path","User")
 
 $ROOT = $PSScriptRoot
 
-function Write-Step($msg) { Write-Host "`n▶ $msg" -ForegroundColor Cyan }
-function Write-Ok($msg)   { Write-Host "  ✓ $msg" -ForegroundColor Green }
-function Write-Err($msg)  { Write-Host "  ✗ $msg" -ForegroundColor Red }
+function Write-Step($msg) { Write-Host "`n>> $msg" -ForegroundColor Cyan }
+function Write-Ok($msg)   { Write-Host "  [OK] $msg" -ForegroundColor Green }
+function Write-Err($msg)  { Write-Host "  [FAIL] $msg" -ForegroundColor Red }
 
-# ── 1. Docker ────────────────────────────────────────────────────────────────
+# -- 1. Docker ----------------------------------------------------------------
 Write-Step "Starting Docker containers (Postgres + Redis)..."
 
 $dockerRunning = docker info 2>&1 | Select-String "Server Version" -Quiet
@@ -32,7 +32,7 @@ while ($retries -lt 20) {
 if ($retries -ge 20) { Write-Err "Containers didn't become healthy in time."; pause; exit 1 }
 Write-Ok "Postgres + Redis healthy"
 
-# ── 2. Backend ───────────────────────────────────────────────────────────────
+# -- 2. Backend -----------------------------------------------------------------
 Write-Step "Starting Spring Boot backend (port 8080)..."
 
 # Load User-scope env vars from registry so the backend process gets them.
@@ -68,10 +68,10 @@ while ($retries -lt 40) {
   if ($h) { break }
   $retries++
 }
-if ($retries -ge 40) { Write-Err "Backend didn't start — check the backend window."; pause; exit 1 }
+if ($retries -ge 40) { Write-Err "Backend didn't start - check the backend window."; pause; exit 1 }
 Write-Ok "Backend running at http://localhost:8080"
 
-# ── 3. AI Service ─────────────────────────────────────────────────────────────
+# -- 3. AI Service ----------------------------------------------------------------
 Write-Step "Starting Python AI service (port 8000)..."
 
 $groqKey = [System.Environment]::GetEnvironmentVariable("GROQ_API_KEY", "User")
@@ -93,10 +93,10 @@ while ($retries -lt 20) {
   if ($h) { break }
   $retries++
 }
-if ($retries -ge 20) { Write-Err "AI service didn't start — check the AI service window."; pause; exit 1 }
+if ($retries -ge 20) { Write-Err "AI service didn't start - check the AI service window."; pause; exit 1 }
 Write-Ok "AI service running at http://localhost:8000"
 
-# ── 4. Frontend ──────────────────────────────────────────────────────────────
+# -- 4. Frontend --------------------------------------------------------------
 Write-Step "Starting React frontend (port 5173)..."
 
 $frontendCmd = "Write-Host 'FinSight Frontend' -ForegroundColor Magenta; " +
@@ -108,14 +108,14 @@ Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", $f
 Start-Sleep -Seconds 4
 Write-Ok "Frontend running at http://localhost:5173"
 
-# ── 5. Open browser ──────────────────────────────────────────────────────────
+# -- 5. Open browser ------------------------------------------------------------
 Write-Step "Opening app in browser..."
 Start-Process "http://localhost:5173"
 
-Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+Write-Host "`n--------------------------------------" -ForegroundColor DarkGray
 Write-Host "  FinSight is running!" -ForegroundColor White
-Write-Host "  App      → http://localhost:5173" -ForegroundColor White
-Write-Host "  API      → http://localhost:8080" -ForegroundColor White
-Write-Host "  AI Svc   → http://localhost:8000" -ForegroundColor White
-Write-Host "  Stop  → run stop.ps1" -ForegroundColor White
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" -ForegroundColor DarkGray
+Write-Host "  App      -> http://localhost:5173" -ForegroundColor White
+Write-Host "  API      -> http://localhost:8080" -ForegroundColor White
+Write-Host "  AI Svc   -> http://localhost:8000" -ForegroundColor White
+Write-Host "  Stop  -> run stop.ps1" -ForegroundColor White
+Write-Host "--------------------------------------`n" -ForegroundColor DarkGray
